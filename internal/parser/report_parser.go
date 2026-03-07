@@ -28,8 +28,9 @@ func NewReportParser() *ReportParser {
 func (p *ReportParser) Parse(message string) ParseResult {
 	lowerMsg := strings.ToLower(message)
 
-	// Must contain alhamdulillah
-	if !strings.Contains(lowerMsg, "alhamdulillah") {
+	// Must contain alhamdulillah (flexible match)
+	alhamdulillahRegex := regexp.MustCompile(`(?i)#?al[ -]?hamdu?[ -]?l+il+a+h`)
+	if !alhamdulillahRegex.MatchString(message) {
 		return ParseResult{}
 	}
 

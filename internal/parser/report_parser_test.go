@@ -40,6 +40,12 @@ func TestParse(t *testing.T) {
 
 		// Default
 		{"Alhamdulillah beres", true, 1, "default"},
+		{"#Alhamdulillah 5 halaman", true, 5, "halaman"},
+		{"#Alhamdulillaah baca 10 hal", true, 10, "halaman"},
+		{"Alhamdullilah 3 hlm", true, 3, "halaman"},
+		{"al hamdulillah beres", true, 1, "default"},
+		{"alhamdu lillah beres", true, 1, "default"},
+		{"Al-Hamdulillah beres", true, 1, "default"},
 
 		// Not a report
 		{"Bukan laporan", false, 0, ""},
