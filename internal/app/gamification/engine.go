@@ -193,10 +193,13 @@ func (e *Engine) checkBadges(ctx context.Context, user *domain.User, todayProgre
 	}
 
 	// Definitions
-	checkAndGrant("🕌 Langkah Pertama — Tilawah pertamamu tercatat!", user.XP > 0)
+	checkAndGrant("🕌 Langkah Pertama — Bismillah, tilawah pertamamu tercatat!", user.XP > 0)
 	checkAndGrant("🔥 Sahabat Qur'an — Istiqomah 7 hari berturut-turut", user.Streak >= 7)
 	checkAndGrant("🌙 Ahlul Qur'an — Istiqomah 30 hari berturut-turut", user.Streak >= 30)
-	checkAndGrant("📖 Khatam Juz — Membaca 1 juz dalam sehari", todayProgress.Pages >= 20)
+	checkAndGrant("📖 Pelajar Al-Qur'an — MasyaAllah, membaca 1 juz dalam sehari!", todayProgress.Pages >= 20)
+	checkAndGrant("📖 Hamalatul Qur'an — Luar biasa, membaca 2 juz dalam sehari!", todayProgress.Pages >= 40)
+	checkAndGrant("📖 Khadimul Qur'an — Tabarakallah, membaca 3 juz dalam sehari!", todayProgress.Pages >= 60)
+	checkAndGrant("📖 Hafidzul Qur'an (Daily) — Allahu Akbar, membaca 5 juz dalam sehari!", todayProgress.Pages >= 100)
 
 	msg := ""
 	if len(newBadges) > 0 {

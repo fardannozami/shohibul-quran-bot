@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/fardannozami/shohibul-quran-bot/internal/app/gamification"
@@ -65,6 +66,10 @@ func (uc *HandleMessageUsecase) handleLeaderboard(ctx context.Context) (string, 
 	if err != nil {
 		return "", err
 	}
+
+	sort.Slice(users, func(i, j int) bool {
+		return users[i].XP > users[j].XP
+	})
 
 	if len(users) == 0 {
 		return "Belum ada data anggota. Ayo mulai tilawah dan laporkan bacaan pertamamu! 📖", nil
