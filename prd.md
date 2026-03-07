@@ -1,434 +1,505 @@
-Baik, kita lanjutkan dengan **dokumen teknis lanjutan** yang akan sangat membantu sebelum coding dimulai. Saya buat 4 bagian penting:
+Berikut **update PRD Shohibul Qur’an Bot** sesuai perubahan yang kamu minta:
 
-1️⃣ **System Architecture Diagram**
-2️⃣ **Flowchart Logic Bot**
-3️⃣ **Database ERD**
-4️⃣ **Struktur Project Go + Whatsmeow (production ready)**
+* ❌ **Anti Abuse System dihapus**
+* ✅ **Laporan boleh berkali-kali**
+* ✅ **Halaman tidak dibatasi**
+* ✅ **Motivasi hanya 1x sehari**
+* ✅ **Waktu motivasi random setiap hari**
 
-Ini biasanya disebut **Technical Design / System Design Document**.
-
----
-
-# 🏗 1. System Architecture
-
-Arsitektur sistem Shohibul Qur'an Bot.
-
-```
-                WhatsApp Server
-                       │
-                       │
-                Whatsmeow Client
-                       │
-        ┌──────────────┴──────────────┐
-        │                             │
-   Message Handler              Event Handler
- (chat message)                (join group)
-        │                             │
-        │                             │
-        ▼                             ▼
-     Parser                    Welcome System
- (detect laporan)
-        │
-        ▼
-  Gamification Engine
- (XP, streak, stats)
-        │
-        ▼
-      Database
-        │
-        ▼
-     Scheduler
-(reminder, motivasi)
-```
-
-### Penjelasan komponen
-
-| Komponen            | Fungsi                |
-| ------------------- | --------------------- |
-| Whatsmeow           | koneksi ke WhatsApp   |
-| Message Handler     | menerima pesan grup   |
-| Parser              | mendeteksi laporan    |
-| Gamification Engine | XP, streak, statistik |
-| Scheduler           | reminder & motivasi   |
-| Database            | menyimpan data        |
+Saya tulis bagian yang berubah agar PRD tetap konsisten untuk development.
 
 ---
 
-# 🔄 2. Flowchart — Laporan Mengaji
+# 📄 PRD — Shohibul Qur'an Bot (Updated)
+
+## 1. Overview
+
+**Nama Produk:** Shohibul Qur'an Bot
+**Platform:** WhatsApp Group
+**Teknologi:** Golang + Whatsmeow
+
+Shohibul Qur’an Bot adalah bot WhatsApp yang membantu komunitas membangun kebiasaan membaca Al-Qur’an melalui sistem:
+
+* laporan membaca
+* gamifikasi
+* reminder
+* motivasi ayat & hadist
+* challenge komunitas
+
+Bot dirancang agar membaca Al-Qur’an menjadi **habit harian yang menyenangkan dan konsisten**.
+
+---
+
+# 🎯 2. Tujuan Produk
+
+Tujuan utama:
+
+* membangun kebiasaan membaca Al-Qur’an setiap hari
+* meningkatkan konsistensi membaca
+* menciptakan motivasi komunitas
+
+---
+
+# 👥 3. Target User
+
+Komunitas muslim seperti:
+
+* grup halaqah
+* keluarga
+* komunitas kajian
+* komunitas Qur’an
+
+---
+
+# ⚙️ 4. Core Features
+
+---
+
+# 📖 4.1 Laporan Membaca Qur’an
+
+Bot mendeteksi pesan yang mengandung kata:
 
 ```
-User kirim pesan
-       │
-       ▼
-Apakah mengandung
-"alhamdulillah" ?
-       │
-   ┌───┴────┐
-   │        │
-  TIDAK    YA
-   │        │
-   ▼        ▼
-Ignore   Parse halaman/juz
-             │
-             ▼
-        Hitung halaman
-             │
-             ▼
-        Simpan laporan
-             │
-             ▼
-        Update streak
-             │
-             ▼
-          Tambah XP
-             │
-             ▼
-       Kirim respon bot
+alhamdulillah
+alhamdulillahirabbilalamin
+```
+
+Contoh laporan:
+
+```
+Alhamdulillah sudah baca 2 halaman
+alhamdulillah 1 juz
+hari ini alhamdulillah 5 halaman
 ```
 
 ---
 
-# 🔄 3. Flowchart — Reminder
+## Behavior Bot
+
+Ketika laporan diterima bot akan:
+
+1️⃣ mencatat laporan
+2️⃣ menghitung halaman
+3️⃣ menambah XP
+4️⃣ update statistik
+
+---
+
+# 📊 4.2 Perhitungan Bacaan
+
+Standar mushaf Madinah:
 
 ```
-Scheduler 18:00
-       │
-       ▼
-Ambil semua user
-       │
-       ▼
-Cek siapa yang
-belum laporan
-       │
-       ▼
-Jika ada user
-belum laporan
-       │
-       ▼
-Kirim reminder
-mention user
+1 juz = 20 halaman
+```
+
+Contoh parsing:
+
+| Input     | Hasil |
+| --------- | ----- |
+| 3 halaman | 3     |
+| 5 hlm     | 5     |
+| 1 juz     | 20    |
+| 0.5 juz   | 10    |
+
+---
+
+# 🔁 4.3 Multiple Reports per Day
+
+User **boleh laporan berkali-kali dalam satu hari**.
+
+Contoh:
+
+```
+Alhamdulillah 3 halaman
+Alhamdulillah 5 halaman
+Alhamdulillah 1 juz
+```
+
+Total dihitung:
+
+```
+3 + 5 + 20 = 28 halaman
+```
+
+Tidak ada batasan jumlah laporan.
+
+---
+
+# 🔥 4.4 Daily Streak
+
+Streak dihitung jika user **melaporkan bacaan minimal sekali dalam sehari**.
+
+Jika satu hari tidak ada laporan → streak reset.
+
+### Level Streak
+
+| Streak | Title             |
+| ------ | ----------------- |
+| 3      | 🌱 Pemula Qur'an  |
+| 7      | 🌿 Sahabat Qur'an |
+| 14     | 🌳 Pecinta Qur'an |
+| 30     | 🕌 Ahlul Qur'an   |
+| 100    | 👑 Penjaga Qur'an |
+
+---
+
+# 🎮 4.5 XP System
+
+XP diberikan berdasarkan aktivitas.
+
+| Aktivitas       | XP  |
+| --------------- | --- |
+| laporan membaca | +10 |
+| 1 halaman       | +2  |
+| streak 7 hari   | +20 |
+| quiz benar      | +5  |
+
+---
+
+# 🎖 4.6 Level System
+
+Level berdasarkan total XP.
+
+| Level | Title          |
+| ----- | -------------- |
+| 1     | Pemula         |
+| 5     | Sahabat Qur'an |
+| 10    | Penjaga Ayat   |
+| 20    | Ahlul Qur'an   |
+
+---
+
+# 🏆 4.7 Leaderboard
+
+Leaderboard mingguan berdasarkan total halaman.
+
+Contoh:
+
+```
+🏆 Ranking Mingguan
+
+🥇 Ahmad — 45 halaman
+🥈 Fatimah — 38 halaman
+🥉 Ali — 32 halaman
 ```
 
 ---
 
-# 🔄 4. Flowchart — Motivasi Random
+# 📊 4.8 Statistik User
+
+Command:
 
 ```
-Scheduler start
-       │
-       ▼
-Generate random time
-(06:00 - 21:00)
-       │
-       ▼
-Tunggu waktu tersebut
-       │
-       ▼
-Ambil random ayat
-atau hadist
-       │
-       ▼
-Kirim pesan motivasi
-ke grup
+!stats
 ```
 
----
-
-# 🔄 5. Flowchart — Welcome Member
+Output:
 
 ```
-User join group
-       │
-       ▼
-Event GroupParticipants
-       │
-       ▼
-Action = add ?
-       │
-   ┌───┴────┐
-   │        │
-  NO       YES
-   │        │
- ignore   Kirim welcome
-            │
-            ▼
-      Jelaskan rules
+📊 Statistik Ahmad
+
+Streak: 6 hari 🔥
+Hari ini: 12 halaman
+Bulan ini: 3.5 juz
+XP: 320
+Level: 7
 ```
 
 ---
 
-# 🗄 6. Database ERD
+# 👋 4.9 Welcome Message
 
-Struktur relasi database.
+Ketika ada member baru join.
 
-```
-users
- ├── id
- ├── phone
- ├── name
- ├── xp
- ├── level
- ├── streak
- └── joined_at
-       │
-       │
-       ▼
-reports
- ├── id
- ├── user_id
- ├── pages
- ├── message
- └── date
-       │
-       │
-       ▼
-daily_progress
- ├── user_id
- ├── date
- ├── pages
- └── reports_count
-       │
-       │
-       ▼
-badges
- ├── user_id
- ├── badge
- └── created_at
-```
-
-Relasi utama:
+Bot mengirim pesan:
 
 ```
-users 1 --- n reports
-users 1 --- n badges
-users 1 --- n daily_progress
+Assalamu'alaikum 👋
+
+Selamat datang di Shohibul Qur'an 📖
+
+Cara laporan membaca:
+
+Alhamdulillah 2 halaman
+Alhamdulillah 1 juz
+
+Bot akan mencatat laporan otomatis.
 ```
 
 ---
 
-# 📦 7. Struktur Project Go
+# 📜 4.10 Group Rules
 
-Struktur project yang scalable.
+Rules disampaikan saat welcome.
+
+1️⃣ niatkan membaca karena Allah
+2️⃣ laporan dengan kata "Alhamdulillah"
+3️⃣ boleh laporan berkali-kali
+4️⃣ minimal membaca beberapa ayat
+
+---
+
+# 🌙 4.11 Random Ayat Qur’an
+
+Bot mengirim ayat random dari API.
+
+API:
 
 ```
-shohibul-quran-bot
-│
-├── cmd
-│   └── bot
-│       └── main.go
-│
-├── internal
-│
-│   ├── bot
-│   │   ├── client.go
-│   │   ├── message_handler.go
-│   │   └── event_handler.go
-│
-│   ├── parser
-│   │   └── report_parser.go
-│
-│   ├── gamification
-│   │   ├── xp.go
-│   │   ├── streak.go
-│   │   └── badge.go
-│
-│   ├── motivation
-│   │   ├── quran_api.go
-│   │   ├── hadith_api.go
-│   │   └── engine.go
-│
-│   ├── scheduler
-│   │   └── cron.go
-│
-│   └── database
-│       ├── db.go
-│       ├── models.go
-│       └── repository.go
-│
-├── config
-│   └── config.yaml
-│
-└── migrations
+https://api.quran.com/api/v4/verses/random
+```
+
+Pesan bot:
+
+```
+📖 Ayat Qur'an
+
+اللَّهُ نُورُ السَّمَاوَاتِ وَالْأَرْضِ
+
+Allah adalah cahaya langit dan bumi
+
+(QS An-Nur 35)
 ```
 
 ---
 
-# ⚙️ 8. Module Responsibilities
+# 📚 4.12 Random Hadist
 
-### bot/
-
-menangani komunikasi dengan WhatsApp.
+API:
 
 ```
-client.go
-message_handler.go
-event_handler.go
+https://api.hadith.gading.dev
 ```
 
----
-
-### parser/
-
-mendeteksi laporan.
+Pesan bot:
 
 ```
-ParsePages()
-DetectReport()
+🌙 Hadist
+
+"Sebaik-baik kalian adalah yang belajar Al-Qur'an dan mengajarkannya."
+
+(HR Bukhari)
 ```
 
 ---
 
-### gamification/
+# ⏰ 5. Motivasi Harian
 
-menghitung XP dan streak.
+Motivasi dikirim **1 kali setiap hari**.
 
-```
-AddXP()
-UpdateStreak()
-GrantBadge()
-```
+Waktu pengiriman **random**.
 
----
-
-### motivation/
-
-mengambil ayat dan hadist dari API.
+Contoh range waktu:
 
 ```
-GetRandomAyat()
-GetRandomHadith()
+06:00 — 21:00
 ```
 
----
-
-### scheduler/
-
-menjalankan:
+Contoh pesan:
 
 ```
-Reminder
-Motivation
-ResetDaily
+📖 Motivasi Qur'an
+
+"Bacalah Al-Qur'an karena ia akan datang memberi syafaat bagi pembacanya."
+
+(HR Muslim)
 ```
 
 ---
 
-# 🧠 9. Algoritma Random Motivasi
+# 🧠 6. Smart Qur'an Motivation Engine
 
-Saat bot start:
+Fitur ini membuat bot terasa hidup.
 
-```
-randomHour = random(6,21)
-randomMinute = random(0,59)
-```
-
-Contoh hasil:
-
-```
-14:37
-```
-
-Scheduler akan kirim motivasi pada waktu tersebut.
-
-Setiap hari waktu akan berbeda.
+Bot akan menganalisis aktivitas grup.
 
 ---
 
-# 📊 10. Estimasi Kompleksitas
+## Metric yang dipantau
 
-Jika semua fitur di PRD dibuat.
-
-| Modul             | LOC kira-kira |
-| ----------------- | ------------- |
-| Bot Handler       | 400           |
-| Parser            | 200           |
-| Gamification      | 400           |
-| Motivation Engine | 300           |
-| Scheduler         | 200           |
-
-Total kira-kira:
-
-```
-1500 — 2500 lines Go
-```
-
-Masih sangat manageable.
+| Metric             | Fungsi             |
+| ------------------ | ------------------ |
+| last_report_time   | aktivitas terakhir |
+| reports_today      | jumlah laporan     |
+| active_users_today | user aktif         |
 
 ---
 
-# 🚀 11. Development Plan
+## Behavior Engine
 
-### Step 1
+### Kondisi 1 — Grup Sepi
 
-setup project
+Jika tidak ada laporan >6 jam.
+
+Bot mengirim motivasi.
 
 ```
-Go
-Whatsmeow
+📖 Jangan lupa membaca Al-Qur'an hari ini 🤍
+Walaupun hanya beberapa ayat.
+```
+
+---
+
+### Kondisi 2 — Banyak laporan
+
+Jika laporan tinggi.
+
+Bot memberi apresiasi.
+
+```
+MasyaAllah 🔥
+
+Hari ini sudah ada 20 laporan membaca Qur'an.
+Semoga Allah memberkahi kita semua.
+```
+
+---
+
+### Kondisi 3 — Target hampir tercapai
+
+```
+🎯 Target hampir tercapai
+
+Tinggal 2 juz lagi untuk mencapai target minggu ini.
+```
+
+---
+
+# 🤝 7. Challenge Grup
+
+Target bacaan komunitas.
+
+Contoh:
+
+```
+🎯 Target Mingguan
+50 Juz
+```
+
+Progress:
+
+```
+Progress: 27 / 50 Juz
+```
+
+---
+
+# 🗄 8. Database Schema
+
+### users
+
+```
+id
+phone
+name
+xp
+level
+streak
+last_read_date
+joined_at
+```
+
+---
+
+### reports
+
+```
+id
+user_id
+pages
+message
+date
+created_at
+```
+
+---
+
+### daily_progress
+
+```
+user_id
+date
+pages
+reports_count
+```
+
+---
+
+### badges
+
+```
+user_id
+badge
+created_at
+```
+
+---
+
+# 🏗 9. System Architecture
+
+```
+WhatsApp
+   ↓
+Whatsmeow Client
+   ↓
+Message Handler
+   ↓
+Parser
+   ↓
+Gamification Engine
+   ↓
 Database
 ```
 
 ---
 
-### Step 2
+# ⏰ 10. Scheduler
 
-fitur dasar
+Jobs yang dijalankan:
 
-* laporan
-* parsing halaman
-* database
-
----
-
-### Step 3
-
-gamification
-
-* XP
-* streak
-* leaderboard
+| Job             | Waktu     |
+| --------------- | --------- |
+| reset harian    | 00:00     |
+| motivasi random | 1x sehari |
+| reminder        | 18:00     |
 
 ---
 
-### Step 4
+# 🚀 11. Deployment
 
-scheduler
-
-* reminder
-* motivasi
-
----
-
-### Step 5
-
-welcome & rules
-
----
-
-# ⭐ Rekomendasi Penting
-
-Agar bot ini **benar-benar kuat dan scalable**, sebaiknya tambahkan juga:
-
-### Heatmap Konsistensi
-
-seperti GitHub:
+Server minimal:
 
 ```
-🟩🟩⬜🟩🟩
-🟩🟩🟩🟩⬜
+1 vCPU
+1GB RAM
+Ubuntu
 ```
 
-Ini sangat memotivasi.
+Service:
+
+```
+systemd
+docker
+```
 
 ---
 
-✅ Dengan dokumen ini sebenarnya kamu sudah punya **blueprint lengkap untuk membangun Shohibul Qur'an Bot**.
+# ⭐ Future Vision
+
+Shohibul Qur'an Bot dapat berkembang menjadi:
+
+* Qur'an habit tracker
+* komunitas khatam Qur'an global
+* platform Qur'an community
 
 ---
 
-Jika kamu mau, saya bisa lanjut membuat sesuatu yang **sangat penting untuk developer**, yaitu:
+Kalau kamu mau, langkah berikutnya yang paling penting sebelum coding adalah membuat:
 
-* **starter source code Go + Whatsmeow (siap run)**
-* lengkap dengan **handler laporan, parser halaman, database, scheduler**
+1️⃣ **System Architecture Diagram yang detail**
+2️⃣ **Flowchart seluruh logic bot (laporan, streak, motivasi, reminder)**
+3️⃣ **Database ERD diagram**
+4️⃣ **Struktur project Go + Whatsmeow yang production ready**
 
-Biasanya dengan itu bot **sudah bisa running dalam 30 menit**.
+Biasanya ini membuat development **3–5x lebih cepat dan minim bug**.

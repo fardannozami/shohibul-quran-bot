@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/fardannozami/shohibul-quran-bot/internal/domain"
+	"github.com/fardannozami/shohibul-quran-bot/internal/parser"
 )
 
 type Engine struct {
@@ -18,7 +19,8 @@ func NewEngine(repo domain.BotRepository) *Engine {
 
 // ProcessReport computes XP, streaks, and badges for an incoming report.
 // Returns a structured message string for reporting back to the user.
-func (e *Engine) ProcessReport(ctx context.Context, userID, name string, pages int, messageText string) (string, error) {
+func (e *Engine) ProcessReport(ctx context.Context, userID, name string, result parser.ParseResult, messageText string) (string, error) {
+	pages := result.Pages
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 	yesterday := today.AddDate(0, 0, -1)
@@ -71,8 +73,16 @@ func (e *Engine) ProcessReport(ctx context.Context, userID, name string, pages i
 		}
 	}
 
-	// Calculate XP: let's say 1 page = 10 XP
-	xpGained := pages * 10
+	// Calculate XP: 10 base for reporting + 2 per page
+	xpGained := 10 + (pages * 2)
+	streakBonus := 0
+
+	// If this is the first report of the day and they hit a 7-day milestone, give bonus
+	if (todayProgress == nil || todayProgress.ReportsCount == 0) && user.Streak > 0 && user.Streak%7 == 0 {
+		streakBonus = 20
+		xpGained += streakBonus
+	}
+
 	user.XP += xpGained
 
 	// Calculate Level: very simple 1 level = every 100 XP
@@ -117,23 +127,42 @@ func (e *Engine) ProcessReport(ctx context.Context, userID, name string, pages i
 	badgeMsg := e.checkBadges(ctx, user, todayProgress)
 
 	// Format response message
-	resp := fmt.Sprintf("Laporan diterima, %s sudah tilawah %d halaman hari ini. Lanjutkan 🔥\n", name, todayProgress.Pages)
-	
-	if isNewStreak && user.Streak == 1 {
-		resp += "Semangat memulai streak baru!\n"
+	resp := "بسم الله الرحمن الرحيم\n"
+	resp += "━━━━━━━━━━━━━━━\n\n"
+
+	// Show surah detail if available
+	if surahInfo := result.FormatSurahInfo(); surahInfo != "" {
+		resp += fmt.Sprintf("MasyaAllah tabarakallah, %s telah tilawah\n\n", name)
+		resp += fmt.Sprintf("%s (%d halaman)\n", surahInfo, pages)
+		resp += fmt.Sprintf("Total tilawah hari ini: *%d halaman*\n\n", todayProgress.Pages)
 	} else {
-		resp += fmt.Sprintf("(🔥 Streak: %d hari)\n", user.Streak)
+		resp += fmt.Sprintf("📖 MasyaAllah tabarakallah, %s telah tilawah *%d halaman* Al-Qur'an hari ini.\n\n", name, todayProgress.Pages)
 	}
 
-	resp += fmt.Sprintf("⭐ +%d XP (Total XP: %d)", xpGained, user.XP)
+	if isNewStreak && user.Streak == 1 {
+		resp += "🌱 Bismillah, semoga menjadi awal istiqomah yang barokah.\n\n"
+	} else {
+		resp += fmt.Sprintf("🔥 *Istiqomah %d hari* berturut-turut — MasyaAllah\n\n", user.Streak)
+	}
+
+	resp += "━━━━━━━━━━━━━━━\n"
+	resp += fmt.Sprintf("⭐  +%d XP\n", xpGained)
+	if streakBonus > 0 {
+		resp += fmt.Sprintf("🎁  Bonus istiqomah +%d XP\n", streakBonus)
+	}
+	resp += fmt.Sprintf("📊  Total XP: *%d*\n", user.XP)
+	resp += fmt.Sprintf("🕌  Level: *%d*\n", user.Level)
+	resp += "━━━━━━━━━━━━━━━\n"
 
 	if user.Level > oldLevel {
-		resp += fmt.Sprintf("\n\n🎉 LEVEL UP! Sekarang kamu Level %d! 🎉", user.Level)
+		resp += fmt.Sprintf("\n🌟 *Allahumma baarik*\nNaik ke *Level %d* Terus jaga tilawahmu 📖\n", user.Level)
 	}
 
 	if badgeMsg != "" {
-		resp += "\n" + badgeMsg
+		resp += badgeMsg
 	}
+
+	resp += "\nSemoga Allah memberkahi setiap huruf yang dibaca 🤲"
 
 	return resp, nil
 }
@@ -164,17 +193,18 @@ func (e *Engine) checkBadges(ctx context.Context, user *domain.User, todayProgre
 	}
 
 	// Definitions
-	checkAndGrant("🏅 First Blood", user.XP > 0)
-	checkAndGrant("🔥 Streak Master 7", user.Streak >= 7)
-	checkAndGrant("🔥 Streak Master 30", user.Streak >= 30)
-	checkAndGrant("📖 Bookworm 1 Juz", todayProgress.Pages >= 20)
+	checkAndGrant("🕌 Langkah Pertama — Tilawah pertamamu tercatat!", user.XP > 0)
+	checkAndGrant("🔥 Sahabat Qur'an — Istiqomah 7 hari berturut-turut", user.Streak >= 7)
+	checkAndGrant("🌙 Ahlul Qur'an — Istiqomah 30 hari berturut-turut", user.Streak >= 30)
+	checkAndGrant("📖 Khatam Juz — Membaca 1 juz dalam sehari", todayProgress.Pages >= 20)
 
 	msg := ""
 	if len(newBadges) > 0 {
-		msg += "\n🎉 ACHIEVEMENT UNLOCKED! 🎉"
+		msg += "\n\n✨ *Alhamdulillah, pencapaian baru!* ✨"
 		for _, b := range newBadges {
 			msg += "\n" + b
 		}
+		msg += "\n\nSemoga menjadi amal jariyah dan syafaat di hari akhir 🤲"
 	}
 	return msg
 }

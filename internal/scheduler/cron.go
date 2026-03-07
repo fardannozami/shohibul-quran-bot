@@ -85,11 +85,11 @@ func (s *CronService) executeReminder(ctx context.Context) {
 }
 
 func (s *CronService) runMotivationJob(ctx context.Context) {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for {
 		now := time.Now()
 		
 		// generate random hour between 6 and 21
-		r := rand.New(rand.NewSource(time.Now().UnixNano()))
 		randHour := r.Intn(16) + 6 // 6 to 21
 		randMin := r.Intn(60)
 
@@ -111,8 +111,16 @@ func (s *CronService) runMotivationJob(ctx context.Context) {
 			msg := fmt.Sprintf("🌟 *Daily Motivation* 🌟\n\n%s", quote)
 			s.sendMessage(ctx, msg, nil)
 			
-			// sleep extra an hour just to be safe it doesn't loop quickly
-			time.Sleep(1 * time.Hour)
+			// sleep until next midnight to ensure we only send ONE motivation per day
+			now2 := time.Now()
+			nextMidnight := time.Date(now2.Year(), now2.Month(), now2.Day()+1, 0, 0, 0, 0, now2.Location())
+			
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(nextMidnight.Sub(now2)):
+				// loop over and generate random time for the new day
+			}
 		}
 	}
 }

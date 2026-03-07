@@ -8,23 +8,85 @@ func TestParse(t *testing.T) {
 	p := NewReportParser()
 
 	tests := []struct {
-		message string
-		isReport bool
-		pages int
+		message    string
+		isReport   bool
+		pages      int
+		reportType string
 	}{
-		{"Alhamdulillah 5 halaman", true, 5},
-		{"alhamdulillah baca 10 hal", true, 10},
-		{"Alhamdulillah 1 juz", true, 20},
-		{"Bukan laporan", false, 0},
-		{"Alhamdulillah beres", true, 1}, // default 1
-		{"alhamdulillah halaman 2", true, 2},
+		// Halaman
+		{"Alhamdulillah 5 halaman", true, 5, "halaman"},
+		{"alhamdulillah baca 10 hal", true, 10, "halaman"},
+		{"alhamdulillah halaman 2", true, 2, "halaman"},
+		{"alhamdulillah 3 hlm", true, 3, "halaman"},
+		{"Alhamdulillah halaman 2-5", true, 4, "halaman"},
+		{"Alhamdulillah 10 sampai 15 hal", true, 6, "halaman"},
+		{"Alhamdulillah hal 1 s/d 10", true, 10, "halaman"},
+
+		// Juz
+		{"Alhamdulillah 1 juz", true, 20, "juz"},
+		{"Alhamdulillah juz 1 sampai 2", true, 40, "juz"},
+		{"Alhamdulillah dari juz 1 ke 3", true, 60, "juz"},
+
+		// Surah + Ayah
+		{"Alhamdulillah surat Al-Baqarah ayat 1-30", true, 5, "surah"},
+		{"alhamdulillah surat yasin", true, 6, "surah"}, // full surat: pages 440-445
+		{"alhamdulillah surat kahfi ayat 1-10", true, 2, "surah"}, // pages 293-294
+		{"alhamdulillah albaqoroh 1 s/d 5", true, 1, "surah"}, // page 2
+		{"alhamdulillah Ali Imran ayat 10 sampai 20", true, 2, "surah"}, // pages 51-52
+
+		// Typo / informal names
+		{"alhamdulillah surat albaqoroh ayat 1-30", true, 5, "surah"},
+		{"alhamdulillah yasiin 1-10", true, 1, "surah"}, // page 440
+
+		// Default
+		{"Alhamdulillah beres", true, 1, "default"},
+
+		// Not a report
+		{"Bukan laporan", false, 0, ""},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.message, func(t *testing.T) {
-			isR, pgs := p.Parse(tt.message)
-			if isR != tt.isReport || pgs != tt.pages {
-				t.Errorf("Parse(%q) = %v, %v; want %v, %v", tt.message, isR, pgs, tt.isReport, tt.pages)
+			result := p.Parse(tt.message)
+
+			if result.IsReport != tt.isReport {
+				t.Errorf("Parse(%q).IsReport = %v; want %v", tt.message, result.IsReport, tt.isReport)
+			}
+
+			// For surah-based tests where we don't know exact pages, skip page check
+			if tt.pages > 0 && result.Pages != tt.pages {
+				t.Errorf("Parse(%q).Pages = %v; want %v", tt.message, result.Pages, tt.pages)
+			}
+
+			if tt.reportType != "" && result.ReportType != tt.reportType {
+				t.Errorf("Parse(%q).ReportType = %q; want %q", tt.message, result.ReportType, tt.reportType)
+			}
+		})
+	}
+}
+
+func TestFindSurahNumber(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected int
+	}{
+		{"Al-Baqarah", 2},
+		{"baqarah", 2},
+		{"albaqoroh", 2},
+		{"Yasin", 36},
+		{"yasiin", 36},
+		{"kahfi", 18},
+		{"Al-Kahfi", 18},
+		{"rahman", 55},
+		{"ikhlas", 112},
+		{"nonexistent", 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			num := FindSurahNumber(tt.input)
+			if num != tt.expected {
+				t.Errorf("FindSurahNumber(%q) = %d; want %d", tt.input, num, tt.expected)
 			}
 		})
 	}

@@ -53,7 +53,10 @@ func main() {
 	// 6. Register Message Handler
 	waService.SetMessageHandler(func(ctx context.Context, client *whatsmeow.Client, evt *events.Message) {
 		// Log all incoming messages with their Chat ID (useful for getting groupID)
-		fmt.Printf("[DEBUG] Incoming message from Chat ID: %s\n", evt.Info.Chat.String())
+		fmt.Printf("[DEBUG] Incoming message from Chat ID: %s (IsGroup: %v)\n", evt.Info.Chat.String(), evt.Info.IsGroup)
+		if evt.Info.IsGroup {
+			fmt.Printf("💡 [INFO] Group ID is: %s\n", evt.Info.Chat.String())
+		}
 
 		// Only handle messages from groups or specific sources if needed.
 		// For now, we filter by GroupID if configured.
@@ -143,23 +146,29 @@ func main() {
 		}
 	})
 	
-	waService.GetClient().AddEventHandler(func(evt interface{}) {
-		switch evt.(type) {
-		case *events.GroupInfo:
-			// if needed.
-		case *events.JoinedGroup:
-			// if needed
-		// TODO: find correct event for member joined
-		}
-	})
-
 	// 7. Initialize Client (DB, Device, etc) - DO NOT CONNECT YET
 	if err := waService.Initialize(context.Background()); err != nil {
 		log.Fatalf("Failed to initialize WhatsApp service: %v", err)
 	}
 
+	waService.GetClient().AddEventHandler(func(evt interface{}) {
+		switch v := evt.(type) {
+		case *events.GroupInfo:
+			// Action mapping from v.Join (list of users who joined)
+			if len(v.Join) > 0 {
+				if cfg.GroupID != "" && v.JID.String() != cfg.GroupID {
+					return
+				}
+				
+				// Run in background to avoid blocking event handler
+				go func() {
+					welcomeHandler.QueueWelcomeMessage(context.Background(), v.JID, v.Join)
+				}()
+			}
+		}
+	})
+
 	welcomeHandler = bot.NewEventHandler(waService.GetClient(), cfg.GroupID)
-	_ = welcomeHandler // Ignoring for now due to missing event structs
 	cronService = scheduler.NewCronService(waService.GetClient(), repo, motEngine, cfg.GroupID)
 	
 	// Start Scheduler
