@@ -19,14 +19,14 @@ func NewEngine(repo domain.BotRepository) *Engine {
 
 // ProcessReport computes XP, streaks, and badges for an incoming report.
 // Returns a structured message string for reporting back to the user.
-func (e *Engine) ProcessReport(ctx context.Context, userID, name string, result parser.ParseResult, messageText string) (string, error) {
+func (e *Engine) ProcessReport(ctx context.Context, userID, name string, result parser.ParseResult, messageText string, groupID string) (string, error) {
 	pages := result.Pages
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 	yesterday := today.AddDate(0, 0, -1)
 
-	// Ensure User exists
-	user, err := e.repo.GetUser(ctx, userID)
+	// Ensure User exists for this group
+	user, err := e.repo.GetUser(ctx, userID, groupID)
 	if err != nil {
 		return "", err
 	}
@@ -34,6 +34,7 @@ func (e *Engine) ProcessReport(ctx context.Context, userID, name string, result 
 	if user == nil {
 		user = &domain.User{
 			ID:       userID,
+			GroupID:  groupID,
 			Phone:    e.repo.ResolveLIDToPhone(ctx, userID), // simple mapping
 			Name:     name,
 			XP:       0,
@@ -49,16 +50,16 @@ func (e *Engine) ProcessReport(ctx context.Context, userID, name string, result 
 		_ = e.repo.UpdateUser(ctx, user)
 	}
 
-	// Fetch today's progress to check if they already reported today
-	todayProgress, err := e.repo.GetDailyProgress(ctx, userID, today)
+	// Fetch today's progress to check if they already reported today in this group
+	todayProgress, err := e.repo.GetDailyProgress(ctx, userID, groupID, today)
 	if err != nil {
 		return "", err
 	}
 
 	isNewStreak := false
 	if todayProgress == nil || todayProgress.ReportsCount == 0 {
-		// New report for today. Let's check yesterday's progress for streak logic.
-		yesterdayProgress, err := e.repo.GetDailyProgress(ctx, userID, yesterday)
+		// New report for today. Let's check yesterday's progress for streak logic in this group.
+		yesterdayProgress, err := e.repo.GetDailyProgress(ctx, userID, groupID, yesterday)
 		if err != nil {
 			return "", err
 		}
@@ -98,6 +99,7 @@ func (e *Engine) ProcessReport(ctx context.Context, userID, name string, result 
 	if todayProgress == nil {
 		todayProgress = &domain.DailyProgress{
 			UserID:       userID,
+			GroupID:      groupID,
 			Date:         today,
 			Pages:        pages,
 			ReportsCount: 1,
@@ -115,6 +117,7 @@ func (e *Engine) ProcessReport(ctx context.Context, userID, name string, result 
 	reportLog := &domain.ReportLog{
 		ID:      fmt.Sprintf("%s-%d", userID, now.UnixNano()),
 		UserID:  userID,
+		GroupID: groupID,
 		Pages:   pages,
 		Message: messageText,
 		Date:    now,
@@ -123,8 +126,8 @@ func (e *Engine) ProcessReport(ctx context.Context, userID, name string, result 
 		return "", err
 	}
 
-	// Check and Grant Badges
-	badgeMsg := e.checkBadges(ctx, user, todayProgress)
+	// Check and Grant Badges in this group context
+	badgeMsg := e.checkBadges(ctx, user, todayProgress, groupID)
 
 	// Format response message
 	resp := "بسم الله الرحمن الرحيم\n"
@@ -167,15 +170,15 @@ func (e *Engine) ProcessReport(ctx context.Context, userID, name string, result 
 	return resp, nil
 }
 
-func (e *Engine) checkBadges(ctx context.Context, user *domain.User, todayProgress *domain.DailyProgress) string {
+func (e *Engine) checkBadges(ctx context.Context, user *domain.User, todayProgress *domain.DailyProgress, groupID string) string {
 	var newBadges []string
 
 	checkAndGrant := func(badgeName string, condition bool) {
 		if !condition {
 			return
 		}
-		// check if already has badge
-		existing, _ := e.repo.GetBadgesByUser(ctx, user.ID)
+		// check if already has badge in this group
+		existing, _ := e.repo.GetBadgesByUser(ctx, user.ID, groupID)
 		for _, b := range existing {
 			if b.Badge == badgeName {
 				return
@@ -185,6 +188,7 @@ func (e *Engine) checkBadges(ctx context.Context, user *domain.User, todayProgre
 		// grant badge
 		newBadge := &domain.BadgeLog{
 			UserID:    user.ID,
+			GroupID:   groupID,
 			Badge:     badgeName,
 			CreatedAt: time.Now(),
 		}

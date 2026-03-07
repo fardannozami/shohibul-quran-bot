@@ -29,27 +29,27 @@ func NewHandleMessageUsecase(repo domain.BotRepository, parser *parser.ReportPar
 	}
 }
 
-func (uc *HandleMessageUsecase) Execute(ctx context.Context, userID, name, message string) (string, error) {
+func (uc *HandleMessageUsecase) Execute(ctx context.Context, userID, name, message string, groupID string) (string, error) {
 	msg := strings.ToLower(strings.TrimSpace(message))
 
 	// 1. Check if it's a report (contains alhamdulillah)
 	result := uc.parser.Parse(msg)
 	if result.IsReport {
-		return uc.gameEngine.ProcessReport(ctx, userID, name, result, message)
+		return uc.gameEngine.ProcessReport(ctx, userID, name, result, message, groupID)
 	}
 
 	// 2. Handle simple commands (support both # and ! prefix)
 	if strings.Contains(msg, "#leaderboard") || strings.Contains(msg, "!leaderboard") {
-		return uc.handleLeaderboard(ctx)
+		return uc.handleLeaderboard(ctx, groupID)
 	}
 	if strings.Contains(msg, "#mystats") || strings.Contains(msg, "!stats") {
-		return uc.handleMyStats(ctx, userID, name)
+		return uc.handleMyStats(ctx, userID, name, groupID)
 	}
 	if strings.Contains(msg, "#achievements") || strings.Contains(msg, "!achievements") {
 		return uc.handleAchievements(ctx)
 	}
 	if strings.Contains(msg, "!target") {
-		return uc.handleTarget(ctx)
+		return uc.handleTarget(ctx, groupID)
 	}
 	if strings.Contains(msg, "!ayat") {
 		return "📖 *Ayat Qur'an*\n\n" + uc.motEngine.GetRandomAyat(), nil
@@ -61,8 +61,8 @@ func (uc *HandleMessageUsecase) Execute(ctx context.Context, userID, name, messa
 	return "", nil
 }
 
-func (uc *HandleMessageUsecase) handleTarget(ctx context.Context) (string, error) {
-	users, err := uc.repo.GetAllUsers(ctx)
+func (uc *HandleMessageUsecase) handleTarget(ctx context.Context, groupID string) (string, error) {
+	users, err := uc.repo.GetAllUsers(ctx, groupID)
 	if err != nil {
 		return "", err
 	}
@@ -84,7 +84,7 @@ func (uc *HandleMessageUsecase) handleTarget(ctx context.Context) (string, error
 	}
 	startOfWeek := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, -daysSinceMonday)
 
-	currentPages, err := uc.repo.GetTotalPagesInRange(ctx, startOfWeek, now)
+	currentPages, err := uc.repo.GetTotalPagesInRange(ctx, startOfWeek, now, groupID)
 	if err != nil {
 		currentPages = 0
 	}
@@ -130,8 +130,8 @@ func (uc *HandleMessageUsecase) generateProgressBar(current, target int) string 
 }
 
 
-func (uc *HandleMessageUsecase) handleLeaderboard(ctx context.Context) (string, error) {
-	users, err := uc.repo.GetAllUsers(ctx)
+func (uc *HandleMessageUsecase) handleLeaderboard(ctx context.Context, groupID string) (string, error) {
+	users, err := uc.repo.GetAllUsers(ctx, groupID)
 	if err != nil {
 		return "", err
 	}
@@ -165,13 +165,13 @@ func (uc *HandleMessageUsecase) handleLeaderboard(ctx context.Context) (string, 
 	return resp, nil
 }
 
-func (uc *HandleMessageUsecase) handleMyStats(ctx context.Context, userID, name string) (string, error) {
-	user, err := uc.repo.GetUser(ctx, userID)
+func (uc *HandleMessageUsecase) handleMyStats(ctx context.Context, userID, name string, groupID string) (string, error) {
+	user, err := uc.repo.GetUser(ctx, userID, groupID)
 	if err != nil || user == nil {
-		return fmt.Sprintf("Afwan %s, belum ada data tilawahmu. Yuk mulai baca Al-Qur'an dan laporkan! 📖🤲", name), nil
+		return fmt.Sprintf("Afwan %s, belum ada data tilawahmu di grup ini. Yuk mulai baca Al-Qur'an dan laporkan! 📖🤲", name), nil
 	}
 
-	badges, _ := uc.repo.GetBadgesByUser(ctx, userID)
+	badges, _ := uc.repo.GetBadgesByUser(ctx, userID, groupID)
 	
 	resp := fmt.Sprintf("📊 *Statistik Tilawah*\n━━━━━━━━━━━━━━━\n\n👤  *%s*\n\n", name)
 	resp += fmt.Sprintf("🕌  Level: *%d*\n", user.Level)

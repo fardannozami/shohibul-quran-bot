@@ -7,6 +7,7 @@ import (
 
 type User struct {
 	ID       string    `json:"id" db:"id"`
+	GroupID  string    `json:"group_id" db:"group_id"`
 	Phone    string    `json:"phone" db:"phone"`
 	Name     string    `json:"name" db:"name"`
 	XP       int       `json:"xp" db:"xp"`
@@ -16,9 +17,9 @@ type User struct {
 }
 
 type UserRepository interface {
-	GetUser(ctx context.Context, id string) (*User, error)
+	GetUser(ctx context.Context, id string, groupID string) (*User, error)
 	CreateUser(ctx context.Context, user *User) error
 	UpdateUser(ctx context.Context, user *User) error
-	GetAllUsers(ctx context.Context) ([]*User, error)
+	GetAllUsers(ctx context.Context, groupID string) ([]*User, error)
 	ResolveLIDToPhone(ctx context.Context, lid string) string
 }

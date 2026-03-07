@@ -19,30 +19,35 @@ func NewBotRepository(db *sql.DB) *BotRepository {
 func (r *BotRepository) InitDatabase(ctx context.Context) error {
 	queries := []string{
 		`CREATE TABLE IF NOT EXISTS users (
-			id TEXT PRIMARY KEY,
+			id TEXT,
+			group_id TEXT,
 			phone TEXT,
 			name TEXT,
 			xp INTEGER DEFAULT 0,
 			level INTEGER DEFAULT 1,
 			streak INTEGER DEFAULT 0,
-			joined_at TEXT
+			joined_at TEXT,
+			PRIMARY KEY (id, group_id)
 		)`,
 		`CREATE TABLE IF NOT EXISTS reports (
 			id TEXT PRIMARY KEY,
 			user_id TEXT,
+			group_id TEXT,
 			pages INTEGER,
 			message TEXT,
 			date TEXT
 		)`,
 		`CREATE TABLE IF NOT EXISTS daily_progress (
 			user_id TEXT,
+			group_id TEXT,
 			date TEXT,
 			pages INTEGER,
 			reports_count INTEGER,
-			PRIMARY KEY (user_id, date)
+			PRIMARY KEY (user_id, date, group_id)
 		)`,
 		`CREATE TABLE IF NOT EXISTS badges (
 			user_id TEXT,
+			group_id TEXT,
 			badge TEXT,
 			created_at TEXT
 		)`,
@@ -52,15 +57,28 @@ func (r *BotRepository) InitDatabase(ctx context.Context) error {
 			return err
 		}
 	}
+
+	// Migration: Add group_id column if it doesn't exist (simplistic check)
+	// In a real app we'd use a robust migration tool.
+	alterQueries := []string{
+		"ALTER TABLE users ADD COLUMN group_id TEXT",
+		"ALTER TABLE reports ADD COLUMN group_id TEXT",
+		"ALTER TABLE daily_progress ADD COLUMN group_id TEXT",
+		"ALTER TABLE badges ADD COLUMN group_id TEXT",
+	}
+	for _, q := range alterQueries {
+		_, _ = r.db.ExecContext(ctx, q) // ignore error if column already exists
+	}
+
 	return nil
 }
 
 // User methods
-func (r *BotRepository) GetUser(ctx context.Context, id string) (*domain.User, error) {
-	row := r.db.QueryRowContext(ctx, "SELECT id, phone, name, xp, level, streak, joined_at FROM users WHERE id = ?", id)
+func (r *BotRepository) GetUser(ctx context.Context, id string, groupID string) (*domain.User, error) {
+	row := r.db.QueryRowContext(ctx, "SELECT id, group_id, phone, name, xp, level, streak, joined_at FROM users WHERE id = ? AND group_id = ?", id, groupID)
 	var u domain.User
 	var joinedAt string
-	err := row.Scan(&u.ID, &u.Phone, &u.Name, &u.XP, &u.Level, &u.Streak, &joinedAt)
+	err := row.Scan(&u.ID, &u.GroupID, &u.Phone, &u.Name, &u.XP, &u.Level, &u.Streak, &joinedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -72,19 +90,19 @@ func (r *BotRepository) GetUser(ctx context.Context, id string) (*domain.User, e
 }
 
 func (r *BotRepository) CreateUser(ctx context.Context, user *domain.User) error {
-	_, err := r.db.ExecContext(ctx, "INSERT INTO users (id, phone, name, xp, level, streak, joined_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-		user.ID, user.Phone, user.Name, user.XP, user.Level, user.Streak, user.JoinedAt.Format(time.RFC3339))
+	_, err := r.db.ExecContext(ctx, "INSERT INTO users (id, group_id, phone, name, xp, level, streak, joined_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		user.ID, user.GroupID, user.Phone, user.Name, user.XP, user.Level, user.Streak, user.JoinedAt.Format(time.RFC3339))
 	return err
 }
 
 func (r *BotRepository) UpdateUser(ctx context.Context, user *domain.User) error {
-	_, err := r.db.ExecContext(ctx, "UPDATE users SET phone=?, name=?, xp=?, level=?, streak=? WHERE id=?",
-		user.Phone, user.Name, user.XP, user.Level, user.Streak, user.ID)
+	_, err := r.db.ExecContext(ctx, "UPDATE users SET phone=?, name=?, xp=?, level=?, streak=? WHERE id=? AND group_id=?",
+		user.Phone, user.Name, user.XP, user.Level, user.Streak, user.ID, user.GroupID)
 	return err
 }
 
-func (r *BotRepository) GetAllUsers(ctx context.Context) ([]*domain.User, error) {
-	rows, err := r.db.QueryContext(ctx, "SELECT id, phone, name, xp, level, streak, joined_at FROM users")
+func (r *BotRepository) GetAllUsers(ctx context.Context, groupID string) ([]*domain.User, error) {
+	rows, err := r.db.QueryContext(ctx, "SELECT id, group_id, phone, name, xp, level, streak, joined_at FROM users WHERE group_id = ?", groupID)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +111,7 @@ func (r *BotRepository) GetAllUsers(ctx context.Context) ([]*domain.User, error)
 	for rows.Next() {
 		var u domain.User
 		var joinedAt string
-		if err := rows.Scan(&u.ID, &u.Phone, &u.Name, &u.XP, &u.Level, &u.Streak, &joinedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.GroupID, &u.Phone, &u.Name, &u.XP, &u.Level, &u.Streak, &joinedAt); err != nil {
 			return nil, err
 		}
 		u.JoinedAt, _ = time.Parse(time.RFC3339, joinedAt)
@@ -113,13 +131,13 @@ func (r *BotRepository) ResolveLIDToPhone(ctx context.Context, lid string) strin
 
 // ReportLog methods
 func (r *BotRepository) InsertReport(ctx context.Context, report *domain.ReportLog) error {
-	_, err := r.db.ExecContext(ctx, "INSERT INTO reports (id, user_id, pages, message, date) VALUES (?, ?, ?, ?, ?)",
-		report.ID, report.UserID, report.Pages, report.Message, report.Date.Format(time.RFC3339))
+	_, err := r.db.ExecContext(ctx, "INSERT INTO reports (id, user_id, group_id, pages, message, date) VALUES (?, ?, ?, ?, ?, ?)",
+		report.ID, report.UserID, report.GroupID, report.Pages, report.Message, report.Date.Format(time.RFC3339))
 	return err
 }
 
-func (r *BotRepository) GetReportsByUser(ctx context.Context, userID string) ([]*domain.ReportLog, error) {
-	rows, err := r.db.QueryContext(ctx, "SELECT id, user_id, pages, message, date FROM reports WHERE user_id = ? ORDER BY date DESC", userID)
+func (r *BotRepository) GetReportsByUser(ctx context.Context, userID string, groupID string) ([]*domain.ReportLog, error) {
+	rows, err := r.db.QueryContext(ctx, "SELECT id, user_id, group_id, pages, message, date FROM reports WHERE user_id = ? AND group_id = ? ORDER BY date DESC", userID, groupID)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +146,7 @@ func (r *BotRepository) GetReportsByUser(ctx context.Context, userID string) ([]
 	for rows.Next() {
 		var log domain.ReportLog
 		var date string
-		if err := rows.Scan(&log.ID, &log.UserID, &log.Pages, &log.Message, &date); err != nil {
+		if err := rows.Scan(&log.ID, &log.UserID, &log.GroupID, &log.Pages, &log.Message, &date); err != nil {
 			return nil, err
 		}
 		log.Date, _ = time.Parse(time.RFC3339, date)
@@ -138,12 +156,12 @@ func (r *BotRepository) GetReportsByUser(ctx context.Context, userID string) ([]
 }
 
 // DailyProgress methods
-func (r *BotRepository) GetDailyProgress(ctx context.Context, userID string, date time.Time) (*domain.DailyProgress, error) {
+func (r *BotRepository) GetDailyProgress(ctx context.Context, userID string, groupID string, date time.Time) (*domain.DailyProgress, error) {
 	dateStr := date.Format("2006-01-02")
-	row := r.db.QueryRowContext(ctx, "SELECT user_id, date, pages, reports_count FROM daily_progress WHERE user_id = ? AND date = ?", userID, dateStr)
+	row := r.db.QueryRowContext(ctx, "SELECT user_id, group_id, date, pages, reports_count FROM daily_progress WHERE user_id = ? AND group_id = ? AND date = ?", userID, groupID, dateStr)
 	var dp domain.DailyProgress
 	var dStr string
-	err := row.Scan(&dp.UserID, &dStr, &dp.Pages, &dp.ReportsCount)
+	err := row.Scan(&dp.UserID, &dp.GroupID, &dStr, &dp.Pages, &dp.ReportsCount)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -157,19 +175,19 @@ func (r *BotRepository) GetDailyProgress(ctx context.Context, userID string, dat
 func (r *BotRepository) UpsertDailyProgress(ctx context.Context, progress *domain.DailyProgress) error {
 	dateStr := progress.Date.Format("2006-01-02")
 	_, err := r.db.ExecContext(ctx, `
-		INSERT INTO daily_progress (user_id, date, pages, reports_count)
-		VALUES (?, ?, ?, ?)
-		ON CONFLICT(user_id, date) DO UPDATE SET
+		INSERT INTO daily_progress (user_id, group_id, date, pages, reports_count)
+		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(user_id, date, group_id) DO UPDATE SET
 			pages = excluded.pages,
 			reports_count = excluded.reports_count
-	`, progress.UserID, dateStr, progress.Pages, progress.ReportsCount)
+	`, progress.UserID, progress.GroupID, dateStr, progress.Pages, progress.ReportsCount)
 	return err
 }
 
-func (r *BotRepository) GetTotalPagesInRange(ctx context.Context, start, end time.Time) (int, error) {
+func (r *BotRepository) GetTotalPagesInRange(ctx context.Context, start, end time.Time, groupID string) (int, error) {
 	startStr := start.Format("2006-01-02")
 	endStr := end.Format("2006-01-02")
-	row := r.db.QueryRowContext(ctx, "SELECT SUM(pages) FROM daily_progress WHERE date BETWEEN ? AND ?", startStr, endStr)
+	row := r.db.QueryRowContext(ctx, "SELECT SUM(pages) FROM daily_progress WHERE group_id = ? AND date BETWEEN ? AND ?", groupID, startStr, endStr)
 	var total sql.NullInt64
 	err := row.Scan(&total)
 	if err != nil {
@@ -180,13 +198,13 @@ func (r *BotRepository) GetTotalPagesInRange(ctx context.Context, start, end tim
 
 // Badge methods
 func (r *BotRepository) InsertBadge(ctx context.Context, badge *domain.BadgeLog) error {
-	_, err := r.db.ExecContext(ctx, "INSERT INTO badges (user_id, badge, created_at) VALUES (?, ?, ?)",
-		badge.UserID, badge.Badge, badge.CreatedAt.Format(time.RFC3339))
+	_, err := r.db.ExecContext(ctx, "INSERT INTO badges (user_id, group_id, badge, created_at) VALUES (?, ?, ?, ?)",
+		badge.UserID, badge.GroupID, badge.Badge, badge.CreatedAt.Format(time.RFC3339))
 	return err
 }
 
-func (r *BotRepository) GetBadgesByUser(ctx context.Context, userID string) ([]*domain.BadgeLog, error) {
-	rows, err := r.db.QueryContext(ctx, "SELECT user_id, badge, created_at FROM badges WHERE user_id = ?", userID)
+func (r *BotRepository) GetBadgesByUser(ctx context.Context, userID string, groupID string) ([]*domain.BadgeLog, error) {
+	rows, err := r.db.QueryContext(ctx, "SELECT user_id, group_id, badge, created_at FROM badges WHERE user_id = ? AND group_id = ?", userID, groupID)
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +213,7 @@ func (r *BotRepository) GetBadgesByUser(ctx context.Context, userID string) ([]*
 	for rows.Next() {
 		var b domain.BadgeLog
 		var created string
-		if err := rows.Scan(&b.UserID, &b.Badge, &created); err != nil {
+		if err := rows.Scan(&b.UserID, &b.GroupID, &b.Badge, &created); err != nil {
 			return nil, err
 		}
 		b.CreatedAt, _ = time.Parse(time.RFC3339, created)
@@ -203,3 +221,4 @@ func (r *BotRepository) GetBadgesByUser(ctx context.Context, userID string) ([]*
 	}
 	return badges, nil
 }
+

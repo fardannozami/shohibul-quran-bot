@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -13,7 +14,7 @@ type Config struct {
 	SQLitePath      string
 	SupabaseURL     string
 	SupabaseKey     string
-	GroupID         string
+	GroupIDs        []string
 	BotPhone        string
 	ReplyDelayMinMs int  // Minimum delay before reply (milliseconds)
 	ReplyDelayMaxMs int  // Maximum delay before reply (milliseconds), 0 = use min as fixed
@@ -28,7 +29,16 @@ func Load() Config {
 	sqlitePath := getenv("SQLITE_PATH", "./data/whatsapp.db")
 	supabaseURL := getenv("SUPABASE_URL", "")
 	supabaseKey := getenv("SUPABASE_KEY", "")
-	groupID := getenv("GROUP_ID", "")
+	groupIDRaw := getenv("GROUP_ID", "")
+	var groupIDs []string
+	if groupIDRaw != "" {
+		parts := strings.Split(groupIDRaw, ",")
+		for _, p := range parts {
+			if trimmed := strings.TrimSpace(p); trimmed != "" {
+				groupIDs = append(groupIDs, trimmed)
+			}
+		}
+	}
 	botPhone := getenv("BOT_PHONE", "")
 	replyDelayMinMs := getenvInt("REPLY_DELAY_MIN_MS", 0)
 	replyDelayMaxMs := getenvInt("REPLY_DELAY_MAX_MS", 0)
@@ -38,7 +48,7 @@ func Load() Config {
 		SQLitePath:      sqlitePath,
 		SupabaseURL:     supabaseURL,
 		SupabaseKey:     supabaseKey,
-		GroupID:         groupID,
+		GroupIDs:        groupIDs,
 		BotPhone:        botPhone,
 		ReplyDelayMinMs: replyDelayMinMs,
 		ReplyDelayMaxMs: replyDelayMaxMs,

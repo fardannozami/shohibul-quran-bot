@@ -15,18 +15,18 @@ import (
 )
 
 type EventHandler struct {
-	client  *whatsmeow.Client
-	groupID string
+	client   *whatsmeow.Client
+	groupIDs []string
 
 	mu             sync.Mutex
 	pendingWelcome map[types.JID][]types.JID
 	welcomeTimer   *time.Timer
 }
 
-func NewEventHandler(client *whatsmeow.Client, groupID string) *EventHandler {
+func NewEventHandler(client *whatsmeow.Client, groupIDs []string) *EventHandler {
 	return &EventHandler{
 		client:         client,
-		groupID:        groupID,
+		groupIDs:        groupIDs,
 		pendingWelcome: make(map[types.JID][]types.JID),
 	}
 }
@@ -34,8 +34,17 @@ func NewEventHandler(client *whatsmeow.Client, groupID string) *EventHandler {
 func (h *EventHandler) HandleEvent(evt interface{}) {
 	switch v := evt.(type) {
 	case *events.GroupInfo:
-		if h.groupID != "" && v.JID.String() != h.groupID {
-			return
+		if len(h.groupIDs) > 0 {
+			allowed := false
+			for _, gid := range h.groupIDs {
+				if v.JID.String() == gid {
+					allowed = true
+					break
+				}
+			}
+			if !allowed {
+				return
+			}
 		}
 
 		// GroupParticipants indicates someone joined or left or was promoted

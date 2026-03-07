@@ -47,8 +47,8 @@ func main() {
 	waService := wa.NewService(cfg.SQLitePath, logger, cfg.SupabaseURL, cfg.SupabaseKey)
 
 	// 5.5 Wait until client is ready or expose it to handlers
-	welcomeHandler := bot.NewEventHandler(nil, cfg.GroupID) // We will inject client later after waService is initialized.
-	cronService := scheduler.NewCronService(nil, repo, motEngine, cfg.GroupID)
+	welcomeHandler := bot.NewEventHandler(nil, cfg.GroupIDs) // We will inject client later after waService is initialized.
+	cronService := scheduler.NewCronService(nil, repo, motEngine, cfg.GroupIDs)
 
 	// 6. Register Message Handler
 	waService.SetMessageHandler(func(ctx context.Context, client *whatsmeow.Client, evt *events.Message) {
@@ -59,9 +59,18 @@ func main() {
 		}
 
 		// Only handle messages from groups or specific sources if needed.
-		// For now, we filter by GroupID if configured.
-		if cfg.GroupID != "" && evt.Info.Chat.String() != cfg.GroupID {
-			return
+		// For now, we filter by GroupIDs if configured.
+		if len(cfg.GroupIDs) > 0 {
+			allowed := false
+			for _, gid := range cfg.GroupIDs {
+				if evt.Info.Chat.String() == gid {
+					allowed = true
+					break
+				}
+			}
+			if !allowed {
+				return
+			}
 		}
 
 		// Ignore messages from self
@@ -106,7 +115,7 @@ func main() {
 		fmt.Printf("Message from %s (%s): %s\n", pushName, userID, msg)
 
 		// Execute Use Case
-		response, err := handleMessageUC.Execute(ctx, userID, pushName, msg)
+		response, err := handleMessageUC.Execute(ctx, userID, pushName, msg, evt.Info.Chat.String())
 		if err != nil {
 			log.Printf("Error handling message: %v", err)
 			return
@@ -156,8 +165,17 @@ func main() {
 		case *events.GroupInfo:
 			// Action mapping from v.Join (list of users who joined)
 			if len(v.Join) > 0 {
-				if cfg.GroupID != "" && v.JID.String() != cfg.GroupID {
-					return
+				if len(cfg.GroupIDs) > 0 {
+					allowed := false
+					for _, gid := range cfg.GroupIDs {
+						if v.JID.String() == gid {
+							allowed = true
+							break
+						}
+					}
+					if !allowed {
+						return
+					}
 				}
 				
 				// Run in background to avoid blocking event handler
@@ -168,8 +186,8 @@ func main() {
 		}
 	})
 
-	welcomeHandler = bot.NewEventHandler(waService.GetClient(), cfg.GroupID)
-	cronService = scheduler.NewCronService(waService.GetClient(), repo, motEngine, cfg.GroupID)
+	welcomeHandler = bot.NewEventHandler(waService.GetClient(), cfg.GroupIDs)
+	cronService = scheduler.NewCronService(waService.GetClient(), repo, motEngine, cfg.GroupIDs)
 	
 	// Start Scheduler
 	cronCtx, cronCancel := context.WithCancel(context.Background())

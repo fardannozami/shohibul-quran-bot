@@ -15,24 +15,24 @@ import (
 )
 
 type CronService struct {
-	client     *whatsmeow.Client
-	repo       domain.BotRepository
-	motEngine  *motivation.Engine
-	groupID    string
+	client    *whatsmeow.Client
+	repo      domain.BotRepository
+	motEngine *motivation.Engine
+	groupIDs  []string
 }
 
-func NewCronService(client *whatsmeow.Client, repo domain.BotRepository, motEngine *motivation.Engine, groupID string) *CronService {
+func NewCronService(client *whatsmeow.Client, repo domain.BotRepository, motEngine *motivation.Engine, groupIDs []string) *CronService {
 	return &CronService{
 		client:    client,
 		repo:      repo,
 		motEngine: motEngine,
-		groupID:   groupID,
+		groupIDs:   groupIDs,
 	}
 }
 
 func (s *CronService) Start(ctx context.Context) {
-	if s.groupID == "" {
-		log.Println("No group ID configured, skipping cron jobs")
+	if len(s.groupIDs) == 0 {
+		log.Println("No group IDs configured, skipping cron jobs")
 		return
 	}
 
@@ -60,27 +60,54 @@ func (s *CronService) runReminderJob(ctx context.Context) {
 
 func (s *CronService) executeReminder(ctx context.Context) {
 	log.Println("Executing daily reminder...")
-	users, err := s.repo.GetAllUsers(ctx)
+
+	for _, gid := range s.groupIDs {
+		users, err := s.repo.GetAllUsers(ctx, gid)
+		if err != nil {
+			log.Printf("Failed to get users for reminder in group %s: %v", gid, err)
+			continue
+		}
+
+		today := time.Now().Truncate(24 * time.Hour)
+		var unreported []string
+		var jids []string
+
+		for _, u := range users {
+			dp, err := s.repo.GetDailyProgress(ctx, u.ID, gid, today)
+			if err == nil && (dp == nil || dp.ReportsCount == 0) {
+				unreported = append(unreported, fmt.Sprintf("@%s", u.Phone))
+				jids = append(jids, u.ID)
+			}
+		}
+
+		if len(unreported) > 0 {
+			msg := fmt.Sprintf("Assalamu'alaikum, udah jam 18:00 nih.\nAyo yang belum lapor: %s\n\nJangan lupa baca Al-Qur'an hari ini ya!\nKetik: *Alhamdulillah 1 juz*", formatList(unreported))
+			s.sendToGroup(ctx, gid, msg, jids)
+		}
+	}
+}
+
+func (s *CronService) sendToGroup(ctx context.Context, gid string, text string, mentions []string) {
+	groupJID, err := types.ParseJID(gid)
 	if err != nil {
-		log.Printf("Failed to get users for reminder: %v", err)
+		log.Printf("Invalid group ID %s: %v", gid, err)
 		return
 	}
 
-	today := time.Now().Truncate(24 * time.Hour)
-	var unreported []string
-	var jids []string
-
-	for _, u := range users {
-		dp, err := s.repo.GetDailyProgress(ctx, u.ID, today)
-		if err == nil && (dp == nil || dp.ReportsCount == 0) {
-			unreported = append(unreported, fmt.Sprintf("@%s", u.Phone))
-			jids = append(jids, u.ID)
-		}
+	msg := &waE2E.Message{
+		ExtendedTextMessage: &waE2E.ExtendedTextMessage{
+			Text: &text,
+			ContextInfo: &waE2E.ContextInfo{},
+		},
 	}
 
-	if len(unreported) > 0 {
-		msg := fmt.Sprintf("Assalamu'alaikum, udah jam 18:00 nih.\nAyo yang belum lapor: %s\n\nJangan lupa baca Al-Qur'an hari ini ya!\nKetik: *Alhamdulillah 1 juz*", formatList(unreported))
-		s.sendMessage(ctx, msg, jids)
+	if len(mentions) > 0 {
+		msg.ExtendedTextMessage.ContextInfo.MentionedJID = mentions
+	}
+
+	_, err = s.client.SendMessage(ctx, groupJID, msg)
+	if err != nil {
+		log.Printf("Failed to send scheduled message to %s: %v", gid, err)
 	}
 }
 
@@ -109,7 +136,9 @@ func (s *CronService) runMotivationJob(ctx context.Context) {
 		case <-time.After(duration):
 			quote := s.motEngine.GetRandomMotivation()
 			msg := fmt.Sprintf("🌟 *Daily Motivation* 🌟\n\n%s", quote)
-			s.sendMessage(ctx, msg, nil)
+			for _, gid := range s.groupIDs {
+				s.sendToGroup(ctx, gid, msg, nil)
+			}
 			
 			// sleep until next midnight to ensure we only send ONE motivation per day
 			now2 := time.Now()
@@ -126,26 +155,28 @@ func (s *CronService) runMotivationJob(ctx context.Context) {
 }
 
 func (s *CronService) sendMessage(ctx context.Context, text string, mentions []string) {
-	groupJID, err := types.ParseJID(s.groupID)
-	if err != nil {
-		log.Printf("Invalid group ID: %v", err)
-		return
-	}
+	for _, gid := range s.groupIDs {
+		groupJID, err := types.ParseJID(gid)
+		if err != nil {
+			log.Printf("Invalid group ID %s: %v", gid, err)
+			continue
+		}
 
-	msg := &waE2E.Message{
-		ExtendedTextMessage: &waE2E.ExtendedTextMessage{
-			Text: &text,
-			ContextInfo: &waE2E.ContextInfo{},
-		},
-	}
+		msg := &waE2E.Message{
+			ExtendedTextMessage: &waE2E.ExtendedTextMessage{
+				Text: &text,
+				ContextInfo: &waE2E.ContextInfo{},
+			},
+		}
 
-	if len(mentions) > 0 {
-		msg.ExtendedTextMessage.ContextInfo.MentionedJID = mentions
-	}
+		if len(mentions) > 0 {
+			msg.ExtendedTextMessage.ContextInfo.MentionedJID = mentions
+		}
 
-	_, err = s.client.SendMessage(ctx, groupJID, msg)
-	if err != nil {
-		log.Printf("Failed to send scheduled message: %v", err)
+		_, err = s.client.SendMessage(ctx, groupJID, msg)
+		if err != nil {
+			log.Printf("Failed to send scheduled message to %s: %v", gid, err)
+		}
 	}
 }
 

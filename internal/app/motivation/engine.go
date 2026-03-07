@@ -6,6 +6,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -98,9 +99,12 @@ func (e *Engine) fetchRandomAyat() (string, error) {
 
 	if len(result.Verse.Translations) > 0 {
 		cleanText := result.Verse.Translations[0].Text
-		// Remove HTML tags if any (basic cleaning)
-		cleanText = strings.ReplaceAll(cleanText, "<sup", " <sup") // Add space before sup
-		// We could use a more robust tag remover, but for simple quotes this might be enough
+		// Remove HTML tags using regex
+		re := regexp.MustCompile("<[^>]*>")
+		cleanText = re.ReplaceAllString(cleanText, "")
+		// Some translations might have double spaces after stripping tags
+		cleanText = strings.Join(strings.Fields(cleanText), " ")
+		
 		return fmt.Sprintf("Allah berfirman: \"%s\" (QS. %s)", cleanText, result.Verse.VerseKey), nil
 	}
 
