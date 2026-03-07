@@ -82,18 +82,29 @@ func (p *ReportParser) extractPages(message string) int {
 		}
 	}
 
-	// Single: "5 halaman", "hal 10"
+	// Fraction: "1/2 hal"
+	fractionPattern := `(\d+)/(\d+)\s*(?:halaman|hal|hlm)\b`
+	reFraction := regexp.MustCompile(fractionPattern)
+	if m := reFraction.FindStringSubmatch(message); len(m) > 2 {
+		num, _ := strconv.ParseFloat(m[1], 64)
+		den, _ := strconv.ParseFloat(m[2], 64)
+		if den > 0 {
+			return int(num / den)
+		}
+	}
+
+	// Single with decimal: "5.5 halaman", "hal 10"
 	patterns := []string{
-		`(\d+)\s*(?:halaman|hal|hlm)\b`,
-		`\b(?:halaman|hal|hlm)\s*(\d+)`,
+		`(\d+(?:\.\d+)?)\s*(?:halaman|hal|hlm)\b`,
+		`\b(?:halaman|hal|hlm)\s*(\d+(?:\.\d+)?)`,
 	}
 
 	for _, pattern := range patterns {
 		re := regexp.MustCompile(pattern)
 		matches := re.FindStringSubmatch(message)
 		if len(matches) > 1 {
-			if val, err := strconv.Atoi(matches[1]); err == nil {
-				return val
+			if val, err := strconv.ParseFloat(matches[1], 64); err == nil {
+				return int(val)
 			}
 		}
 	}
@@ -112,9 +123,20 @@ func (p *ReportParser) extractJuz(message string) int {
 		}
 	}
 
-	// Single: "1 juz", "juz 30"
+	// Fraction: "1/2 juz"
+	fractionPattern := `(\d+)/(\d+)\s*juz\b`
+	reFraction := regexp.MustCompile(fractionPattern)
+	if m := reFraction.FindStringSubmatch(message); len(m) > 2 {
+		num, _ := strconv.ParseFloat(m[1], 64)
+		den, _ := strconv.ParseFloat(m[2], 64)
+		if den > 0 {
+			return int(num / den * 20)
+		}
+	}
+
+	// Single with decimal: "1.5 juz", "0.5 juz", "1 juz", "juz 30"
 	patterns := []string{
-		`(\d+)\s*juz\b`,
+		`(\d+(?:\.\d+)?)\s*juz\b`,
 		`\bjuz\s*(\d+)`,
 	}
 
@@ -122,8 +144,8 @@ func (p *ReportParser) extractJuz(message string) int {
 		re := regexp.MustCompile(pattern)
 		matches := re.FindStringSubmatch(message)
 		if len(matches) > 1 {
-			if val, err := strconv.Atoi(matches[1]); err == nil {
-				return val * 20
+			if val, err := strconv.ParseFloat(matches[1], 64); err == nil {
+				return int(val * 20)
 			}
 		}
 	}
