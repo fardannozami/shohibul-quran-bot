@@ -166,6 +166,18 @@ func (r *BotRepository) UpsertDailyProgress(ctx context.Context, progress *domai
 	return err
 }
 
+func (r *BotRepository) GetTotalPagesInRange(ctx context.Context, start, end time.Time) (int, error) {
+	startStr := start.Format("2006-01-02")
+	endStr := end.Format("2006-01-02")
+	row := r.db.QueryRowContext(ctx, "SELECT SUM(pages) FROM daily_progress WHERE date BETWEEN ? AND ?", startStr, endStr)
+	var total sql.NullInt64
+	err := row.Scan(&total)
+	if err != nil {
+		return 0, err
+	}
+	return int(total.Int64), nil
+}
+
 // Badge methods
 func (r *BotRepository) InsertBadge(ctx context.Context, badge *domain.BadgeLog) error {
 	_, err := r.db.ExecContext(ctx, "INSERT INTO badges (user_id, badge, created_at) VALUES (?, ?, ?)",

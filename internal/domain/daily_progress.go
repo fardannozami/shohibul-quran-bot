@@ -15,4 +15,5 @@ type DailyProgress struct {
 type DailyProgressRepository interface {
 	GetDailyProgress(ctx context.Context, userID string, date time.Time) (*DailyProgress, error)
 	UpsertDailyProgress(ctx context.Context, progress *DailyProgress) error
+	GetTotalPagesInRange(ctx context.Context, start, end time.Time) (int, error)
 }

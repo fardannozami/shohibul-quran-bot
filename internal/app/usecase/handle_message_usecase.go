@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/fardannozami/shohibul-quran-bot/internal/app/gamification"
+	"github.com/fardannozami/shohibul-quran-bot/internal/app/motivation"
 	"github.com/fardannozami/shohibul-quran-bot/internal/domain"
 	"github.com/fardannozami/shohibul-quran-bot/internal/parser"
 )
@@ -15,13 +17,15 @@ type HandleMessageUsecase struct {
 	repo       domain.BotRepository
 	parser     *parser.ReportParser
 	gameEngine *gamification.Engine
+	motEngine  *motivation.Engine
 }
 
-func NewHandleMessageUsecase(repo domain.BotRepository, parser *parser.ReportParser, gameEngine *gamification.Engine) *HandleMessageUsecase {
+func NewHandleMessageUsecase(repo domain.BotRepository, parser *parser.ReportParser, gameEngine *gamification.Engine, motEngine *motivation.Engine) *HandleMessageUsecase {
 	return &HandleMessageUsecase{
 		repo:       repo,
 		parser:     parser,
 		gameEngine: gameEngine,
+		motEngine:  motEngine,
 	}
 }
 
@@ -47,19 +51,84 @@ func (uc *HandleMessageUsecase) Execute(ctx context.Context, userID, name, messa
 	if strings.Contains(msg, "!target") {
 		return uc.handleTarget(ctx)
 	}
+	if strings.Contains(msg, "!ayat") {
+		return "📖 *Ayat Qur'an*\n\n" + uc.motEngine.GetRandomAyat(), nil
+	}
+	if strings.Contains(msg, "!hadith") || strings.Contains(msg, "!hadist") {
+		return "🌙 *Hadist*\n\n" + uc.motEngine.GetRandomHadith(), nil
+	}
 
 	return "", nil
 }
 
 func (uc *HandleMessageUsecase) handleTarget(ctx context.Context) (string, error) {
-	// For now, return a fixed goal message based on PRD suggestions
-	// In the future, this can be calculated from weekly reports
+	users, err := uc.repo.GetAllUsers(ctx)
+	if err != nil {
+		return "", err
+	}
+	memberCount := len(users)
+	if memberCount == 0 {
+		memberCount = 1 // fallback
+	}
+
+	// Target: members * 7 juz
+	targetJuz := memberCount * 7
+	targetPages := targetJuz * 20 // 1 juz = 20 pages
+
+	// Calculate weekly progress (Monday to now)
+	now := time.Now()
+	// Monday is 1, Sunday is 0 in Time.Weekday()? No, Sunday=0, Monday=1, ... Saturday=6
+	daysSinceMonday := int(now.Weekday()) - 1
+	if daysSinceMonday < 0 {
+		daysSinceMonday = 6 // Sunday
+	}
+	startOfWeek := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, -daysSinceMonday)
+
+	currentPages, err := uc.repo.GetTotalPagesInRange(ctx, startOfWeek, now)
+	if err != nil {
+		currentPages = 0
+	}
+
+	currentJuz := float64(currentPages) / 20.0
+
 	resp := "🎯 *Target Komunitas Shohibul Qur'an*\n\n"
-	resp += "Bersama kita targetkan khatam *50 Juz* setiap minggunya! 🔥\n\n"
-	resp += "Progress minggu ini: _(Segera hadir fitur akumulasi mingguan!)_\n\n"
-	resp += "Semangat tilawah semuanya! 📖✨"
+	resp += fmt.Sprintf("Anggota aktif: *%d orang*\n", memberCount)
+	resp += fmt.Sprintf("Target mingguan: *%d Juz* (%d halaman) 🔥\n\n", targetJuz, targetPages)
+	
+	progressBar := uc.generateProgressBar(currentPages, targetPages)
+	resp += fmt.Sprintf("📊 *Progress Minggu Ini:*\n%s\n", progressBar)
+	resp += fmt.Sprintf("Tercapai: *%.1f Juz* (%d halaman)\n\n", currentJuz, currentPages)
+	
+	if currentPages >= targetPages {
+		resp += "🎉 *MABRUK!* Target mingguan tercapai. Teruslah istiqomah! 🚀"
+	} else {
+		resp += "Semangat tilawah semuanya! Sedikit lagi target tercapai 📖✨"
+	}
+	
 	return resp, nil
 }
+
+func (uc *HandleMessageUsecase) generateProgressBar(current, target int) string {
+	if target <= 0 {
+		return "[░░░░░░░░░░] 0%"
+	}
+	percent := (current * 100) / target
+	if percent > 100 {
+		percent = 100
+	}
+	
+	filled := percent / 10
+	bar := ""
+	for i := 0; i < 10; i++ {
+		if i < filled {
+			bar += "▓"
+		} else {
+			bar += "░"
+		}
+	}
+	return fmt.Sprintf("[%s] %d%%", bar, percent)
+}
+
 
 func (uc *HandleMessageUsecase) handleLeaderboard(ctx context.Context) (string, error) {
 	users, err := uc.repo.GetAllUsers(ctx)

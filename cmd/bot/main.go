@@ -40,14 +40,14 @@ func main() {
 	// 4. Use Cases
 	parserMod := parser.NewReportParser()
 	gameEngine := gamification.NewEngine(repo)
-	handleMessageUC := usecase.NewHandleMessageUsecase(repo, parserMod, gameEngine)
+	motEngine := motivation.NewEngine()
+	handleMessageUC := usecase.NewHandleMessageUsecase(repo, parserMod, gameEngine, motEngine)
 
 	// 5. WhatsApp Service
 	waService := wa.NewService(cfg.SQLitePath, logger, cfg.SupabaseURL, cfg.SupabaseKey)
 
 	// 5.5 Wait until client is ready or expose it to handlers
 	welcomeHandler := bot.NewEventHandler(nil, cfg.GroupID) // We will inject client later after waService is initialized.
-	motEngine := motivation.NewEngine()
 	cronService := scheduler.NewCronService(nil, repo, motEngine, cfg.GroupID)
 
 	// 6. Register Message Handler
