@@ -134,20 +134,24 @@ func (p *ReportParser) extractJuz(message string) int {
 		}
 	}
 
-	// Single with decimal: "1.5 juz", "0.5 juz", "1 juz", "juz 30"
-	patterns := []string{
-		`(\d+(?:\.\d+)?)\s*juz\b`,
-		`\bjuz\s*(\d+)`,
+	// Cardinal with decimal: "1.5 juz", "0.5 juz", "1 juz"
+	// Must have the number BEFORE the word "juz"
+	cardinalPattern := `(\d+(?:\.\d+)?)\s*juz\b`
+	reCardinal := regexp.MustCompile(cardinalPattern)
+	if m := reCardinal.FindStringSubmatch(message); len(m) > 1 {
+		if val, err := strconv.ParseFloat(m[1], 64); err == nil {
+			return int(val * 20)
+		}
 	}
 
-	for _, pattern := range patterns {
-		re := regexp.MustCompile(pattern)
-		matches := re.FindStringSubmatch(message)
-		if len(matches) > 1 {
-			if val, err := strconv.ParseFloat(matches[1], 64); err == nil {
-				return int(val * 20)
-			}
-		}
+	// Ordinal: "juz 30", "juz 13"
+	// Must have the word "juz" BEFORE the number
+	ordinalPattern := `(?i)\bjuz\s*(\d+)`
+	reOrdinal := regexp.MustCompile(ordinalPattern)
+	if m := reOrdinal.FindStringSubmatch(message); len(m) > 1 {
+		// Found an ordinal juz reference like "juz 13"
+		// This means they finished that 1 juz.
+		return 20
 	}
 
 	if strings.Contains(message, "juz") {

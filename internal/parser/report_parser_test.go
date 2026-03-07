@@ -29,6 +29,8 @@ func TestParse(t *testing.T) {
 		{"Alhamdulillah 1.5 juz", true, 30, "juz"}, 
 		{"Alhamdulillah juz 1 sampai 2", true, 40, "juz"},
 		{"Alhamdulillah dari juz 1 ke 3", true, 60, "juz"},
+		{"alhamdulillah juz 13", true, 20, "juz"},
+		{"alhamdulillah juz 13 ✅️", true, 20, "juz"},
 
 		// Surah + Ayah
 		{"Alhamdulillah surat Al-Baqarah ayat 1-30", true, 5, "surah"},
