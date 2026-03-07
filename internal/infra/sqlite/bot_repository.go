@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"time"
 
 	"github.com/fardannozami/shohibul-quran-bot/internal/domain"
@@ -17,10 +18,11 @@ func NewBotRepository(db *sql.DB) *BotRepository {
 }
 
 func (r *BotRepository) InitDatabase(ctx context.Context) error {
+	// 1. Create tables if they don't exist
 	queries := []string{
 		`CREATE TABLE IF NOT EXISTS users (
 			id TEXT,
-			group_id TEXT,
+			group_id TEXT DEFAULT 'main',
 			phone TEXT,
 			name TEXT,
 			xp INTEGER DEFAULT 0,
@@ -32,14 +34,14 @@ func (r *BotRepository) InitDatabase(ctx context.Context) error {
 		`CREATE TABLE IF NOT EXISTS reports (
 			id TEXT PRIMARY KEY,
 			user_id TEXT,
-			group_id TEXT,
+			group_id TEXT DEFAULT 'main',
 			pages INTEGER,
 			message TEXT,
 			date TEXT
 		)`,
 		`CREATE TABLE IF NOT EXISTS daily_progress (
 			user_id TEXT,
-			group_id TEXT,
+			group_id TEXT DEFAULT 'main',
 			date TEXT,
 			pages INTEGER,
 			reports_count INTEGER,
@@ -47,7 +49,7 @@ func (r *BotRepository) InitDatabase(ctx context.Context) error {
 		)`,
 		`CREATE TABLE IF NOT EXISTS badges (
 			user_id TEXT,
-			group_id TEXT,
+			group_id TEXT DEFAULT 'main',
 			badge TEXT,
 			created_at TEXT
 		)`,
@@ -58,12 +60,71 @@ func (r *BotRepository) InitDatabase(ctx context.Context) error {
 		}
 	}
 
-	// Migration: Add group_id column if it doesn't exist (simplistic check)
-	// In a real app we'd use a robust migration tool.
+	// 2. Migration: Check if primary keys are correct by recreating tables if needed
+	// This handles the case where group_id was added later but not included in PK
+
+	// Migrate daily_progress if PK is missing group_id
+	var dpSchema string
+	err := r.db.QueryRowContext(ctx, "SELECT sql FROM sqlite_master WHERE type='table' AND name='daily_progress'").Scan(&dpSchema)
+	if err == nil {
+		dpSchema = strings.ReplaceAll(dpSchema, "\n", " ")
+		dpSchema = strings.ReplaceAll(dpSchema, "\t", " ")
+		if !strings.Contains(dpSchema, "PRIMARY KEY (user_id, date, group_id)") && !strings.Contains(dpSchema, "PRIMARY KEY(user_id, date, group_id)") {
+			migrationQueries := []string{
+				"ALTER TABLE daily_progress RENAME TO daily_progress_old",
+				`CREATE TABLE daily_progress (
+					user_id TEXT,
+					group_id TEXT DEFAULT 'main',
+					date TEXT,
+					pages INTEGER,
+					reports_count INTEGER,
+					PRIMARY KEY (user_id, date, group_id)
+				)`,
+				"INSERT INTO daily_progress (user_id, group_id, date, pages, reports_count) SELECT user_id, IFNULL(group_id, 'main'), date, pages, reports_count FROM daily_progress_old",
+				"DROP TABLE daily_progress_old",
+			}
+			for _, q := range migrationQueries {
+				if _, err := r.db.ExecContext(ctx, q); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	// Migrate users if PK is missing group_id
+	var usersSchema string
+	err = r.db.QueryRowContext(ctx, "SELECT sql FROM sqlite_master WHERE type='table' AND name='users'").Scan(&usersSchema)
+	if err == nil {
+		usersSchema = strings.ReplaceAll(usersSchema, "\n", " ")
+		usersSchema = strings.ReplaceAll(usersSchema, "\t", " ")
+		if !strings.Contains(usersSchema, "PRIMARY KEY (id, group_id)") && !strings.Contains(usersSchema, "PRIMARY KEY(id, group_id)") {
+			migrationQueries := []string{
+				"ALTER TABLE users RENAME TO users_old",
+				`CREATE TABLE users (
+					id TEXT,
+					group_id TEXT DEFAULT 'main',
+					phone TEXT,
+					name TEXT,
+					xp INTEGER DEFAULT 0,
+					level INTEGER DEFAULT 1,
+					streak INTEGER DEFAULT 0,
+					joined_at TEXT,
+					PRIMARY KEY (id, group_id)
+				)`,
+				"INSERT INTO users (id, group_id, phone, name, xp, level, streak, joined_at) SELECT id, IFNULL(group_id, 'main'), phone, name, xp, level, streak, joined_at FROM users_old",
+				"DROP TABLE users_old",
+			}
+			for _, q := range migrationQueries {
+				if _, err := r.db.ExecContext(ctx, q); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	// Migration: Add group_id column if it doesn't exist (for tables not handled above)
 	alterQueries := []string{
-		"ALTER TABLE users ADD COLUMN group_id TEXT",
 		"ALTER TABLE reports ADD COLUMN group_id TEXT",
-		"ALTER TABLE daily_progress ADD COLUMN group_id TEXT",
 		"ALTER TABLE badges ADD COLUMN group_id TEXT",
 	}
 	for _, q := range alterQueries {
