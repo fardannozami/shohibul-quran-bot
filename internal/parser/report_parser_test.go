@@ -60,6 +60,8 @@ func TestParse(t *testing.T) {
 		{"Alhamdulillah al ashr - an nas", true, 4, "surah"},
 		{"Alhamdulillah Al-Fatihah sampai Al-Baqarah", true, 49, "surah"},
 
+		{"Alhamdulillah alfatihah sampai albaqorah ayat 100", true, 15, "surah"},
+
 		// Not a report
 		{"Bukan laporan", false, 0, ""},
 	}
@@ -67,7 +69,7 @@ func TestParse(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.message, func(t *testing.T) {
 			results := p.Parse(tt.message)
-			
+
 			if !tt.isReport {
 				if len(results) > 0 {
 					t.Errorf("Parse(%q) got %d results, want 0", tt.message, len(results))

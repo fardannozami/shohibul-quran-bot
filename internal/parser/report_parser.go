@@ -130,8 +130,31 @@ func (p *ReportParser) extractSurahRange(message *string) []ParseResult {
 		s2Text_candidate := strings.Join(wordsAfter[:len2], " ")
 		isNumeric1 := regexp.MustCompile(`^\d+$`).MatchString(s1Text_candidate)
 		isNumeric2 := regexp.MustCompile(`^\d+$`).MatchString(s2Text_candidate)
+		// Check for optional "ayat <number>" after s2Text
+		endAyah := 0
+		lenAyah := 0
+		if len(wordsAfter) > len2 {
+			// Check if next word is "ayat"
+			if strings.ToLower(wordsAfter[len2]) == "ayat" {
+				if len(wordsAfter) > len2+1 {
+					if num, err := strconv.Atoi(wordsAfter[len2+1]); err == nil {
+						endAyah = num
+						lenAyah = 2
+					}
+				}
+			} else {
+				// Maybe just a number? e.g. "Al-Baqarah 100" (but wait, we need to be careful with "Al-Baqarah 100-110")
+				// Usually in ranges like "Fatihah sampai Baqarah 100", people might omit 'ayat'.
+				// But let's require 'ayat' for now to be safe, or check if it's a number followed by nothing else.
+				if num, err := strconv.Atoi(wordsAfter[len2]); err == nil {
+					endAyah = num
+					lenAyah = 1
+				}
+			}
+		}
 
 		if isNumeric1 && isNumeric2 {
+			// ... (numeric range check same as before)
 			hasPrefix := false
 			if len(wordsBefore) > len1 {
 				lastWord := strings.ToLower(wordsBefore[len(wordsBefore)-len1-1])
@@ -140,44 +163,68 @@ func (p *ReportParser) extractSurahRange(message *string) []ParseResult {
 				}
 			}
 			if !hasPrefix {
-				// Likely a page range, DON'T mask, let extractPages handle it
 				continue
 			}
 		}
 
-		// Check for ayah range false positives (e.g. Al-Baqarah 1-10)
+		// ... (ayah range false positive check same as before)
 		beforeTrim := strings.TrimSpace(beforePart)
 		if len(beforeTrim) > 0 {
 			lastChar := beforeTrim[len(beforeTrim)-1]
-			if lastChar >= '0' && lastChar <= '1' { // Simplified check for numbers
-				// Actually, check if it ends with a digit
-				if lastChar >= '0' && lastChar <= '9' {
-					continue
-				}
+			if lastChar >= '0' && lastChar <= '9' {
+				continue
 			}
 		}
 
 		startPage := getAyahPage(s1, 1)
-		endPage := getAyahPage(s2, getSurahMaxAyahs(s2))
+		
+		finalEndAyah := getSurahMaxAyahs(s2)
+		if endAyah > 0 && endAyah <= finalEndAyah {
+			finalEndAyah = endAyah
+		}
+		endPage := getAyahPage(s2, finalEndAyah)
+		
 		pages := 1
 		if startPage > 0 && endPage > 0 {
 			pages = endPage - startPage + 1
 			if pages < 1 { pages = 1 }
 		}
 
+		surahName := fmt.Sprintf("%s - %s", GetSurahName(s1), GetSurahName(s2))
+		if endAyah > 0 {
+			surahName = fmt.Sprintf("%s - %s ayat %d", GetSurahName(s1), GetSurahName(s2), endAyah)
+		}
+
 		results = append(results, ParseResult{
 			IsReport:   true,
 			Pages:      pages,
-			SurahName:  fmt.Sprintf("%s - %s", GetSurahName(s1), GetSurahName(s2)),
+			SurahName:  surahName,
 			ReportType: "surah",
 		})
 
-		// Mask the match (s1 text to s2 text)
+		// Mask the match (s1 text to s2 text + optional ayah index)
 		idx1 := strings.LastIndex(beforePart, s1Text_candidate)
-		idx2 := strings.Index(afterPart, s2Text_candidate)
-		if idx1 != -1 && idx2 != -1 {
+		
+		// Recalculate end index including ayah if found
+		endWords := wordsAfter[:len2+lenAyah]
+		// Note: Joining might lose original spacing but strings.Index in afterPart should be fine
+		// if we use a more robust way to find the end position.
+		
+		// Find end of the wordsAfter section we want to mask
+		// A simple way is to find the index of the last word's end.
+		lastWordInMatch := endWords[len(endWords)-1]
+		// Start searching for last word after we've seen all preceding words
+		searchOffset := 0
+		for _, w := range endWords[:len(endWords)-1] {
+			if pos := strings.Index(afterPart[searchOffset:], w); pos != -1 {
+				searchOffset += pos + len(w)
+			}
+		}
+		idxOfLastWord := strings.Index(afterPart[searchOffset:], lastWordInMatch)
+		
+		if idx1 != -1 && idxOfLastWord != -1 {
 			totalMatchStart := idx1
-			totalMatchEnd := loc[1] + idx2 + len(s2Text_candidate)
+			totalMatchEnd := loc[1] + searchOffset + idxOfLastWord + len(lastWordInMatch)
 			*message = (*message)[:totalMatchStart] + strings.Repeat(" ", totalMatchEnd-totalMatchStart) + (*message)[totalMatchEnd:]
 		} else {
 			*message = (*message)[:loc[0]] + strings.Repeat(" ", loc[1]-loc[0]) + (*message)[loc[1]:]
