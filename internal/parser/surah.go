@@ -108,7 +108,7 @@ var surahAliases = map[string]int{
 	// Surah 41
 	"fussilat": 41, "fushshilat": 41,
 	// Surah 42
-	"syura": 42, "asysyura": 42, "syuura": 42,
+	"syura": 42, "asysyura": 42, "syuura": 42, "syuro": 42, "asysyuro": 42,
 	// Surah 43
 	"zukhruf": 43, "azzukhruf": 43,
 	// Surah 44
