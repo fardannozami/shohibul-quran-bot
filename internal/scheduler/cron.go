@@ -26,7 +26,7 @@ func NewCronService(client *whatsmeow.Client, repo domain.BotRepository, motEngi
 		client:    client,
 		repo:      repo,
 		motEngine: motEngine,
-		groupIDs:   groupIDs,
+		groupIDs:  groupIDs,
 	}
 }
 
@@ -45,7 +45,7 @@ func (s *CronService) runReminderJob(ctx context.Context) {
 		now := time.Now()
 		target := time.Date(now.Year(), now.Month(), now.Day(), 18, 0, 0, 0, now.Location())
 		if now.After(target) {
-			target = target.AddDate(0, 0, 1) // next day 18:00
+			target = target.AddDate(0, 0, 1)
 		}
 
 		duration := target.Sub(now)
@@ -62,9 +62,15 @@ func (s *CronService) executeReminder(ctx context.Context) {
 	log.Println("Executing daily reminder...")
 
 	for _, gid := range s.groupIDs {
-		users, err := s.repo.GetAllUsers(ctx, gid)
+		groupJID, err := types.ParseJID(gid)
 		if err != nil {
-			log.Printf("Failed to get users for reminder in group %s: %v", gid, err)
+			log.Printf("Invalid group ID %s: %v", gid, err)
+			continue
+		}
+
+		groupInfo, err := s.client.GetGroupInfo(ctx, groupJID)
+		if err != nil {
+			log.Printf("Failed to get group info for %s: %v", gid, err)
 			continue
 		}
 
@@ -72,16 +78,19 @@ func (s *CronService) executeReminder(ctx context.Context) {
 		var unreported []string
 		var jids []string
 
-		for _, u := range users {
-			dp, err := s.repo.GetDailyProgress(ctx, u.ID, gid, today)
+		for _, participant := range groupInfo.Participants {
+			phone := participant.JID.User
+			userID := s.repo.ResolveLIDToPhone(ctx, phone)
+
+			dp, err := s.repo.GetDailyProgress(ctx, userID, gid, today)
 			if err == nil && (dp == nil || dp.ReportsCount == 0) {
-				unreported = append(unreported, fmt.Sprintf("@%s", u.Phone))
-				jids = append(jids, u.ID)
+				unreported = append(unreported, fmt.Sprintf("@%s", phone))
+				jids = append(jids, participant.JID.String())
 			}
 		}
 
 		if len(unreported) > 0 {
-			msg := fmt.Sprintf("Assalamu'alaikum, udah jam 18:00 nih.\nAyo yang belum lapor: %s\n\nJangan lupa baca Al-Qur'an hari ini ya!\nKetik: *Alhamdulillah 1 juz*", formatList(unreported))
+			msg := fmt.Sprintf("Assalamu'alaikum, udah jam 18:00 nih.\nAyo yang belum laporan: %s\n\nJangan lupa baca Al-Qur'an hari ini ya!\nKetik: *Alhamdulillah 1 juz*", formatList(unreported))
 			s.sendToGroup(ctx, gid, msg, jids)
 		}
 	}
@@ -96,7 +105,7 @@ func (s *CronService) sendToGroup(ctx context.Context, gid string, text string, 
 
 	msg := &waE2E.Message{
 		ExtendedTextMessage: &waE2E.ExtendedTextMessage{
-			Text: &text,
+			Text:        &text,
 			ContextInfo: &waE2E.ContextInfo{},
 		},
 	}
@@ -115,14 +124,12 @@ func (s *CronService) runMotivationJob(ctx context.Context) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for {
 		now := time.Now()
-		
-		// generate random hour between 6 and 21
-		randHour := r.Intn(16) + 6 // 6 to 21
+
+		randHour := r.Intn(16) + 6
 		randMin := r.Intn(60)
 
 		target := time.Date(now.Year(), now.Month(), now.Day(), randHour, randMin, 0, 0, now.Location())
-		
-		// If target is already past for today, schedule it for tomorrow
+
 		if target.Before(now) {
 			target = target.AddDate(0, 0, 1)
 		}
@@ -139,16 +146,14 @@ func (s *CronService) runMotivationJob(ctx context.Context) {
 			for _, gid := range s.groupIDs {
 				s.sendToGroup(ctx, gid, msg, nil)
 			}
-			
-			// sleep until next midnight to ensure we only send ONE motivation per day
+
 			now2 := time.Now()
 			nextMidnight := time.Date(now2.Year(), now2.Month(), now2.Day()+1, 0, 0, 0, 0, now2.Location())
-			
+
 			select {
 			case <-ctx.Done():
 				return
 			case <-time.After(nextMidnight.Sub(now2)):
-				// loop over and generate random time for the new day
 			}
 		}
 	}
@@ -164,7 +169,7 @@ func (s *CronService) sendMessage(ctx context.Context, text string, mentions []s
 
 		msg := &waE2E.Message{
 			ExtendedTextMessage: &waE2E.ExtendedTextMessage{
-				Text: &text,
+				Text:        &text,
 				ContextInfo: &waE2E.ContextInfo{},
 			},
 		}
