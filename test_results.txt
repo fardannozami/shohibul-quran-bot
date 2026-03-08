@@ -5,68 +5,55 @@
 === RUN   TestParse/alhamdulillah_3_hlm
 === RUN   TestParse/Alhamdulillah_halaman_2-5
 === RUN   TestParse/Alhamdulillah_10_sampai_15_hal
-=== RUN   TestParse/Alhamdulillah_hal_1_s/d_10
-=== RUN   TestParse/Alhamdulillah_1_juz
-=== RUN   TestParse/Alhamdulillah_1/2_juz
-=== RUN   TestParse/Alhamdulillah_0.5_juz
-=== RUN   TestParse/Alhamdulillah_1.5_juz
-=== RUN   TestParse/Alhamdulillah_juz_1_sampai_2
-=== RUN   TestParse/Alhamdulillah_dari_juz_1_ke_3
-=== RUN   TestParse/alhamdulillah_juz_13
-=== RUN   TestParse/alhamdulillah_juz_13_??????
-=== RUN   TestParse/Alhamdulillah_surat_Al-Baqarah_ayat_1-30
-=== RUN   TestParse/alhamdulillah_surat_yasin
-=== RUN   TestParse/alhamdulillah_surat_kahfi_ayat_1-10
-=== RUN   TestParse/alhamdulillah_albaqoroh_1_s/d_5
-=== RUN   TestParse/alhamdulillah_Ali_Imran_ayat_10_sampai_20
-=== RUN   TestParse/Alhamdulillah_Al_'Ankabut_46_-_79
-=== RUN   TestParse/alhamdulillah_al_mulk
-=== RUN   TestParse/alhamdulillah_yasin
-=== RUN   TestParse/alhamdulillah_asysyuro
-=== RUN   TestParse/alhamdulillah_surat_albaqoroh_ayat_1-30
-=== RUN   TestParse/alhamdulillah_yasiin_1-10
-=== RUN   TestParse/Alhamdulillah_beres
-=== RUN   TestParse/#Alhamdulillah_5_halaman
-=== RUN   TestParse/#Alhamdulillaah_baca_10_hal
-=== RUN   TestParse/Alhamdullilah_3_hlm
-=== RUN   TestParse/al_hamdulillah_beres
-=== RUN   TestParse/alhamdu_lillah_beres
-=== RUN   TestParse/Al-Hamdulillah_beres
-=== RUN   TestParse/Bukan_laporan
---- PASS: TestParse (0.03s)
-    --- PASS: TestParse/Alhamdulillah_5_halaman (0.00s)
-    --- PASS: TestParse/alhamdulillah_baca_10_hal (0.00s)
-    --- PASS: TestParse/alhamdulillah_halaman_2 (0.00s)
-    --- PASS: TestParse/alhamdulillah_3_hlm (0.00s)
-    --- PASS: TestParse/Alhamdulillah_halaman_2-5 (0.00s)
-    --- PASS: TestParse/Alhamdulillah_10_sampai_15_hal (0.00s)
-    --- PASS: TestParse/Alhamdulillah_hal_1_s/d_10 (0.00s)
-    --- PASS: TestParse/Alhamdulillah_1_juz (0.00s)
-    --- PASS: TestParse/Alhamdulillah_1/2_juz (0.00s)
-    --- PASS: TestParse/Alhamdulillah_0.5_juz (0.00s)
-    --- PASS: TestParse/Alhamdulillah_1.5_juz (0.00s)
-    --- PASS: TestParse/Alhamdulillah_juz_1_sampai_2 (0.00s)
-    --- PASS: TestParse/Alhamdulillah_dari_juz_1_ke_3 (0.00s)
-    --- PASS: TestParse/alhamdulillah_juz_13 (0.00s)
-    --- PASS: TestParse/alhamdulillah_juz_13_?????? (0.00s)
-    --- PASS: TestParse/Alhamdulillah_surat_Al-Baqarah_ayat_1-30 (0.00s)
-    --- PASS: TestParse/alhamdulillah_surat_yasin (0.00s)
-    --- PASS: TestParse/alhamdulillah_surat_kahfi_ayat_1-10 (0.00s)
-    --- PASS: TestParse/alhamdulillah_albaqoroh_1_s/d_5 (0.00s)
-    --- PASS: TestParse/alhamdulillah_Ali_Imran_ayat_10_sampai_20 (0.00s)
-    --- PASS: TestParse/Alhamdulillah_Al_'Ankabut_46_-_79 (0.00s)
-    --- PASS: TestParse/alhamdulillah_al_mulk (0.00s)
-    --- PASS: TestParse/alhamdulillah_yasin (0.00s)
-    --- PASS: TestParse/alhamdulillah_asysyuro (0.00s)
-    --- PASS: TestParse/alhamdulillah_surat_albaqoroh_ayat_1-30 (0.00s)
-    --- PASS: TestParse/alhamdulillah_yasiin_1-10 (0.00s)
-    --- PASS: TestParse/Alhamdulillah_beres (0.00s)
-    --- PASS: TestParse/#Alhamdulillah_5_halaman (0.00s)
-    --- PASS: TestParse/#Alhamdulillaah_baca_10_hal (0.00s)
-    --- PASS: TestParse/Alhamdullilah_3_hlm (0.00s)
-    --- PASS: TestParse/al_hamdulillah_beres (0.00s)
-    --- PASS: TestParse/alhamdu_lillah_beres (0.00s)
-    --- PASS: TestParse/Al-Hamdulillah_beres (0.00s)
-    --- PASS: TestParse/Bukan_laporan (0.00s)
-PASS
-ok  	github.com/fardannozami/shohibul-quran-bot/internal/parser	0.767s
+panic: test timed out after 10m0s
+	running tests:
+		TestParse (10m0s)
+		TestParse/Alhamdulillah_10_sampai_15_hal (10m0s)
+
+goroutine 35 [running]:
+testing.(*M).startAlarm.func1()
+	C:/Program Files/Go/src/testing/testing.go:2682 +0x345
+created by time.goFunc
+	C:/Program Files/Go/src/time/sleep.go:215 +0x2d
+
+goroutine 1 [chan receive, 9 minutes]:
+testing.(*T).Run(0xc000003500, {0x7ff610718b0c?, 0x7ffad41a3fb0?}, 0x7ff6107281e0)
+	C:/Program Files/Go/src/testing/testing.go:2005 +0x469
+testing.runTests.func1(0xc000003500)
+	C:/Program Files/Go/src/testing/testing.go:2477 +0x37
+testing.tRunner(0xc000003500, 0xc00005fc70)
+	C:/Program Files/Go/src/testing/testing.go:1934 +0xc3
+testing.runTests(0xc0000080c0, {0x7ff610875d00, 0x2, 0x2}, {0x7?, 0xc0000728c0?, 0x7ff61087ed20?})
+	C:/Program Files/Go/src/testing/testing.go:2475 +0x4b4
+testing.(*M).Run(0xc000074140)
+	C:/Program Files/Go/src/testing/testing.go:2337 +0x63a
+main.main()
+	_testmain.go:47 +0x9b
+
+goroutine 7 [chan receive, 9 minutes]:
+testing.(*T).Run(0xc0000036c0, {0x7ff610720671?, 0x0?}, 0xc000236040)
+	C:/Program Files/Go/src/testing/testing.go:2005 +0x469
+github.com/fardannozami/shohibul-quran-bot/internal/parser.TestParse(0xc0000036c0)
+	D:/coding/golang/shohibul-quran-bot/internal/parser/report_parser_test.go:68 +0x78
+testing.tRunner(0xc0000036c0, 0x7ff6107281e0)
+	C:/Program Files/Go/src/testing/testing.go:1934 +0xc3
+created by testing.(*T).Run in goroutine 1
+	C:/Program Files/Go/src/testing/testing.go:1997 +0x44b
+
+goroutine 13 [runnable]:
+github.com/fardannozami/shohibul-quran-bot/internal/parser.sanitizeSurahName({0x7ff61071855c?, 0x8?})
+	D:/coding/golang/shohibul-quran-bot/internal/parser/surah.go:258 +0xa9
+github.com/fardannozami/shohibul-quran-bot/internal/parser.FindSurahNumber({0xc000335840?, 0x6?})
+	D:/coding/golang/shohibul-quran-bot/internal/parser/surah.go:339 +0x525
+github.com/fardannozami/shohibul-quran-bot/internal/parser.(*ReportParser).extractSurahRange(0x7ff610720671?, 0xc000489dd8)
+	D:/coding/golang/shohibul-quran-bot/internal/parser/report_parser.go:111 +0x6ca
+github.com/fardannozami/shohibul-quran-bot/internal/parser.(*ReportParser).Parse(0x7ff6108c5fe0, {0x7ff610720671, 0x1e})
+	D:/coding/golang/shohibul-quran-bot/internal/parser/report_parser.go:41 +0xb9
+github.com/fardannozami/shohibul-quran-bot/internal/parser.TestParse.func1(0xc0001c6540)
+	D:/coding/golang/shohibul-quran-bot/internal/parser/report_parser_test.go:69 +0x3b
+testing.tRunner(0xc0001c6540, 0xc000236040)
+	C:/Program Files/Go/src/testing/testing.go:1934 +0xc3
+created by testing.(*T).Run in goroutine 7
+	C:/Program Files/Go/src/testing/testing.go:1997 +0x44b
+FAIL	github.com/fardannozami/shohibul-quran-bot/internal/parser	600.715s
+FAIL

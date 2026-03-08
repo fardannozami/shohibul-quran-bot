@@ -1,0 +1,7 @@
+=== RUN   TestParse
+=== RUN   TestParse/Alhamdulillah_5_halaman
+=== RUN   TestParse/alhamdulillah_baca_10_hal
+=== RUN   TestParse/alhamdulillah_halaman_2
+=== RUN   TestParse/alhamdulillah_3_hlm
+=== RUN   TestParse/Alhamdulillah_halaman_2-5
+=== RUN   TestParse/Alhamdulillah_10_sampai_15_hal

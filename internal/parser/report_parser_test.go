@@ -56,6 +56,10 @@ func TestParse(t *testing.T) {
 		{"alhamdu lillah beres", true, 1, "default"},
 		{"Al-Hamdulillah beres", true, 1, "default"},
 
+		// Surah Range
+		{"Alhamdulillah al ashr - an nas", true, 4, "surah"},
+		{"Alhamdulillah Al-Fatihah sampai Al-Baqarah", true, 49, "surah"},
+
 		// Not a report
 		{"Bukan laporan", false, 0, ""},
 	}

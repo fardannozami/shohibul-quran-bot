@@ -37,8 +37,13 @@ func (p *ReportParser) Parse(message string) []ParseResult {
 	// We use a copy of the message that we'll modify (consume)
 	workMsg := strings.ToLower(message)
 
-	// 1. Try surah + ayah (most specific, can have multiple)
-	// Passing pointer to workMsg so it can consume (mask) matched parts
+	// 1. Try surah range (e.g. Al-Ashr - An-Nas)
+	rangeResults := p.extractSurahRange(&workMsg)
+	if len(rangeResults) > 0 {
+		results = append(results, rangeResults...)
+	}
+
+	// 2. Try surah + ayah (individual surahs)
 	surahResults := p.extractSurahAyah(&workMsg)
 	if len(surahResults) > 0 {
 		results = append(results, surahResults...)
@@ -76,6 +81,109 @@ func (p *ReportParser) ParseCompat(message string) (bool, int) {
 		totalPages += r.Pages
 	}
 	return true, totalPages
+}
+
+func (p *ReportParser) extractSurahRange(message *string) []ParseResult {
+	// Pattern for range separators. Require at least one space around hyphen.
+	sepPattern := `\s+(-+|sampai|sd|s/d|ke|dari)\s+`
+	re := regexp.MustCompile(sepPattern)
+	
+	var results []ParseResult
+	
+	// Use FindAllStringIndex to avoid infinite loop when we skip masking
+	matches := re.FindAllStringIndex(*message, -1)
+	
+	// Process matches in reverse to avoid offset issues if we mask
+	for i := len(matches) - 1; i >= 0; i-- {
+		loc := matches[i]
+		beforePart := (*message)[:loc[0]]
+		afterPart := (*message)[loc[1]:]
+
+		wordsBefore := strings.Fields(beforePart)
+		wordsAfter := strings.Fields(afterPart)
+
+		s1, s2 := 0, 0
+		len1, len2 := 0, 0 
+
+		for i := 1; i <= 3 && i <= len(wordsBefore); i++ {
+			candidate := strings.Join(wordsBefore[len(wordsBefore)-i:], " ")
+			if num := FindSurahNumber(candidate); num > 0 {
+				s1 = num
+				len1 = i
+			}
+		}
+
+		for i := 1; i <= 3 && i <= len(wordsAfter); i++ {
+			candidate := strings.Join(wordsAfter[:i], " ")
+			if num := FindSurahNumber(candidate); num > 0 {
+				s2 = num
+				len2 = i
+			}
+		}
+
+		if s1 <= 0 || s2 <= 0 || s2 < s1 {
+			continue
+		}
+
+		// Check for numeric range false positives
+		s1Text_candidate := strings.Join(wordsBefore[len(wordsBefore)-len1:], " ")
+		s2Text_candidate := strings.Join(wordsAfter[:len2], " ")
+		isNumeric1 := regexp.MustCompile(`^\d+$`).MatchString(s1Text_candidate)
+		isNumeric2 := regexp.MustCompile(`^\d+$`).MatchString(s2Text_candidate)
+
+		if isNumeric1 && isNumeric2 {
+			hasPrefix := false
+			if len(wordsBefore) > len1 {
+				lastWord := strings.ToLower(wordsBefore[len(wordsBefore)-len1-1])
+				if lastWord == "surat" || lastWord == "surah" {
+					hasPrefix = true
+				}
+			}
+			if !hasPrefix {
+				// Likely a page range, DON'T mask, let extractPages handle it
+				continue
+			}
+		}
+
+		// Check for ayah range false positives (e.g. Al-Baqarah 1-10)
+		beforeTrim := strings.TrimSpace(beforePart)
+		if len(beforeTrim) > 0 {
+			lastChar := beforeTrim[len(beforeTrim)-1]
+			if lastChar >= '0' && lastChar <= '1' { // Simplified check for numbers
+				// Actually, check if it ends with a digit
+				if lastChar >= '0' && lastChar <= '9' {
+					continue
+				}
+			}
+		}
+
+		startPage := getAyahPage(s1, 1)
+		endPage := getAyahPage(s2, getSurahMaxAyahs(s2))
+		pages := 1
+		if startPage > 0 && endPage > 0 {
+			pages = endPage - startPage + 1
+			if pages < 1 { pages = 1 }
+		}
+
+		results = append(results, ParseResult{
+			IsReport:   true,
+			Pages:      pages,
+			SurahName:  fmt.Sprintf("%s - %s", GetSurahName(s1), GetSurahName(s2)),
+			ReportType: "surah",
+		})
+
+		// Mask the match (s1 text to s2 text)
+		idx1 := strings.LastIndex(beforePart, s1Text_candidate)
+		idx2 := strings.Index(afterPart, s2Text_candidate)
+		if idx1 != -1 && idx2 != -1 {
+			totalMatchStart := idx1
+			totalMatchEnd := loc[1] + idx2 + len(s2Text_candidate)
+			*message = (*message)[:totalMatchStart] + strings.Repeat(" ", totalMatchEnd-totalMatchStart) + (*message)[totalMatchEnd:]
+		} else {
+			*message = (*message)[:loc[0]] + strings.Repeat(" ", loc[1]-loc[0]) + (*message)[loc[1]:]
+		}
+	}
+	return results
 }
 
 func (p *ReportParser) extractPages(message *string) int {
