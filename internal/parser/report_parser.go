@@ -176,6 +176,9 @@ func (p *ReportParser) extractSurahAyah(message string) ParseResult {
 		// Pattern 4: Loose match for common surahs followed directly by numbers (e.g., "Yasin 1-10", "Al-Baqarah 255")
 		// Requires at least a range or a number > 1 to avoid matching everything
 		`(?i)\b([a-z][a-z\s'-]{2,}?)\s+(\d+)(?:` + sep + `(\d+))(?:\s|$)`,
+		// Pattern 5: Standalone surah name (e.g., "al mulk", "yasin")
+		// This is the least specific pattern, so it goes last.
+		`(?i)\b([a-z][a-z\s'-]{2,}?)(?:\s|$)`,
 	}
 
 	for _, pattern := range patterns {

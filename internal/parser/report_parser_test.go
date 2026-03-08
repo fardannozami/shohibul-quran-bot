@@ -39,6 +39,8 @@ func TestParse(t *testing.T) {
 		{"alhamdulillah albaqoroh 1 s/d 5", true, 1, "surah"}, // page 2
 		{"alhamdulillah Ali Imran ayat 10 sampai 20", true, 2, "surah"}, // pages 51-52
 		{"Alhamdulillah Al 'Ankabut 46 - 79", true, 3, "surah"},         // pages 402-404 (max ayah 69)
+		{"alhamdulillah al mulk", true, 3, "surah"},                     // pages 562-564
+		{"alhamdulillah yasin", true, 6, "surah"},                       // pages 440-445
 
 		// Typo / informal names
 		{"alhamdulillah surat albaqoroh ayat 1-30", true, 5, "surah"},
