@@ -213,6 +213,7 @@ func (p *ReportParser) extractSurahAyah(message string) ParseResult {
 				}
 
 				var startAyah, endAyah int
+				maxAyah := getSurahMaxAyahs(surahNum)
 
 				if startAyahStr != "" {
 					startAyah, _ = strconv.Atoi(startAyahStr)
@@ -224,7 +225,21 @@ func (p *ReportParser) extractSurahAyah(message string) ParseResult {
 				} else {
 					// No ayahs mentioned, get full surah pages
 					startAyah = 1
-					endAyah = getSurahMaxAyahs(surahNum)
+					endAyah = maxAyah
+				}
+
+				// Cap ayahs to valid range
+				if startAyah < 1 {
+					startAyah = 1
+				}
+				if startAyah > maxAyah {
+					startAyah = maxAyah
+				}
+				if endAyah < startAyah {
+					endAyah = startAyah
+				}
+				if endAyah > maxAyah {
+					endAyah = maxAyah
 				}
 
 				// Calculate page difference
@@ -273,6 +288,14 @@ func getAyahPage(surahNum, ayahNum int) int {
 	if surahMap, ok := MushafPages[surahNum]; ok {
 		if page, ok := surahMap[ayahNum]; ok {
 			return page
+		}
+		// fallback: if ayahNum is out of range, try to get closest valid ayah
+		maxAyah := getSurahMaxAyahs(surahNum)
+		if ayahNum <= 0 {
+			return surahMap[1]
+		}
+		if ayahNum > maxAyah {
+			return surahMap[maxAyah]
 		}
 	}
 	return 0
