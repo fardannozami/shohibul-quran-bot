@@ -130,42 +130,34 @@ func (e *Engine) ProcessReport(ctx context.Context, userID, name string, result 
 	badgeMsg := e.checkBadges(ctx, user, todayProgress, groupID)
 
 	// Format response message
-	resp := "بسم الله الرحمن الرحيم\n"
-	resp += "━━━━━━━━━━━━━━━\n\n"
-
-	// Show surah detail if available
+	resp := "📖 *Laporan Tilawah*\n"
 	if surahInfo := result.FormatSurahInfo(); surahInfo != "" {
-		resp += fmt.Sprintf("MasyaAllah tabarakallah, %s telah tilawah\n\n", name)
-		resp += fmt.Sprintf("%s (%d halaman)\n", surahInfo, pages)
-		resp += fmt.Sprintf("Total tilawah hari ini: *%d halaman*\n\n", todayProgress.Pages)
+		resp += fmt.Sprintf("%s: %s (%d hlm)\n", name, surahInfo, pages)
 	} else {
-		resp += fmt.Sprintf("📖 MasyaAllah tabarakallah, %s telah tilawah *%d halaman* Al-Qur'an hari ini.\n\n", name, todayProgress.Pages)
+		resp += fmt.Sprintf("%s: %d hlm\n", name, pages)
 	}
+	resp += fmt.Sprintf("Total hari ini: *%d hlm*\n", todayProgress.Pages)
 
 	if isNewStreak && user.Streak == 1 {
-		resp += "🌱 Bismillah, semoga menjadi awal istiqomah yang barokah.\n\n"
+		resp += "🌱 Bismillah, awal istiqomah.\n"
 	} else {
-		resp += fmt.Sprintf("🔥 *Istiqomah %d hari* berturut-turut — MasyaAllah\n\n", user.Streak)
+		resp += fmt.Sprintf("🔥 Istiqomah: *%d hari*\n", user.Streak)
 	}
 
-	resp += "━━━━━━━━━━━━━━━\n"
-	resp += fmt.Sprintf("⭐  +%d XP\n", xpGained)
+	resp += fmt.Sprintf("⭐ +%d XP | Total: %d | Lvl: %d\n", xpGained, user.XP, user.Level)
 	if streakBonus > 0 {
-		resp += fmt.Sprintf("🎁  Bonus istiqomah +%d XP\n", streakBonus)
+		resp += fmt.Sprintf("🎁 Bonus: +%d XP\n", streakBonus)
 	}
-	resp += fmt.Sprintf("📊  Total XP: *%d*\n", user.XP)
-	resp += fmt.Sprintf("🕌  Level: *%d*\n", user.Level)
-	resp += "━━━━━━━━━━━━━━━\n"
 
 	if user.Level > oldLevel {
-		resp += fmt.Sprintf("\n🌟 *Allahumma baarik*\nNaik ke *Level %d* Terus jaga tilawahmu 📖\n", user.Level)
+		resp += fmt.Sprintf("✨ *Level Up!* -> Lvl %d\n", user.Level)
 	}
 
 	if badgeMsg != "" {
 		resp += badgeMsg
 	}
 
-	resp += "\nSemoga Allah memberkahi setiap huruf yang dibaca 🤲"
+	resp += "\nBarakallahu fiikum. 🤲"
 
 	return resp, nil
 }
