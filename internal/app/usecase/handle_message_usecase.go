@@ -33,9 +33,9 @@ func (uc *HandleMessageUsecase) Execute(ctx context.Context, userID, name, messa
 	msg := strings.ToLower(strings.TrimSpace(message))
 
 	// 1. Check if it's a report (contains alhamdulillah)
-	result := uc.parser.Parse(msg)
-	if result.IsReport {
-		return uc.gameEngine.ProcessReport(ctx, userID, name, result, message, groupID)
+	results := uc.parser.Parse(msg)
+	if len(results) > 0 {
+		return uc.gameEngine.ProcessReports(ctx, userID, name, results, message, groupID)
 	}
 
 	// 2. Handle simple commands (support both # and ! prefix)

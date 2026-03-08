@@ -24,178 +24,171 @@ func NewReportParser() *ReportParser {
 	return &ReportParser{}
 }
 
-// Parse determines if the message contains a valid report and returns a ParseResult
-func (p *ReportParser) Parse(message string) ParseResult {
-	lowerMsg := strings.ToLower(message)
-
+// Parse determines if the message contains a valid report and returns a slice of ParseResult
+func (p *ReportParser) Parse(message string) []ParseResult {
 	// Must contain alhamdulillah (flexible match)
 	alhamdulillahRegex := regexp.MustCompile(`(?i)#?al[ -]?hamdu?[ -]?l+il+a+h`)
 	if !alhamdulillahRegex.MatchString(message) {
-		return ParseResult{}
+		return nil
 	}
 
-	// 1. Try halaman
-	if pages := p.extractPages(lowerMsg); pages > 0 {
-		return ParseResult{IsReport: true, Pages: pages, ReportType: "halaman"}
+	var results []ParseResult
+	
+	// We use a copy of the message that we'll modify (consume)
+	workMsg := strings.ToLower(message)
+
+	// 1. Try surah + ayah (most specific, can have multiple)
+	// Passing pointer to workMsg so it can consume (mask) matched parts
+	surahResults := p.extractSurahAyah(&workMsg)
+	if len(surahResults) > 0 {
+		results = append(results, surahResults...)
 	}
 
-	// 2. Try juz
-	if pages := p.extractJuz(lowerMsg); pages > 0 {
-		return ParseResult{IsReport: true, Pages: pages, ReportType: "juz"}
+	// 2. Try juz (can have multiple)
+	juzResults := p.extractJuz(&workMsg)
+	if len(juzResults) > 0 {
+		results = append(results, juzResults...)
 	}
 
-	// 3. Try surah + ayah
-	if result := p.extractSurahAyah(message); result.IsReport {
-		return result
+	// 3. Try halaman
+	// Always try extractPages even if we found surah/juz, but it will use the remaining workMsg
+	if pages := p.extractPages(&workMsg); pages > 0 {
+		results = append(results, ParseResult{IsReport: true, Pages: pages, ReportType: "halaman"})
 	}
 
-	// 4. Default: assume 1 page if alhamdulillah detected
-	return ParseResult{IsReport: true, Pages: 1, ReportType: "default"}
+	// 4. Default: assume 1 page if alhamdulillah detected but no specific info found
+	if len(results) == 0 {
+		results = append(results, ParseResult{IsReport: true, Pages: 1, ReportType: "default"})
+	}
+
+	return results
 }
 
 // ParseCompat is a backward-compatible wrapper returning (bool, int)
+// If multiple results, it returns the total pages.
 func (p *ReportParser) ParseCompat(message string) (bool, int) {
-	result := p.Parse(message)
-	return result.IsReport, result.Pages
+	results := p.Parse(message)
+	if len(results) == 0 {
+		return false, 0
+	}
+	totalPages := 0
+	for _, r := range results {
+		totalPages += r.Pages
+	}
+	return true, totalPages
 }
 
-func (p *ReportParser) extractPages(message string) int {
-	// Range: "halaman 2-5", "5-10 hal", "hal 10 sampai 15"
-	rangePattern := `(?i)(?:halaman|hal|hlm)\s*(\d+)\s*(?:-+|s/d|sampai|sd|ke|dari)\s*(\d+)`
-	rangePatternRev := `(?i)(\d+)\s*(?:-+|s/d|sampai|sd|ke|dari)\s*(\d+)\s*(?:halaman|hal|hlm)`
-	
-	reRange := regexp.MustCompile(rangePattern)
-	if m := reRange.FindStringSubmatch(message); len(m) > 2 {
-		start, _ := strconv.Atoi(m[1])
-		end, _ := strconv.Atoi(m[2])
-		if end >= start {
-			return end - start + 1
-		}
-	}
-
-	reRangeRev := regexp.MustCompile(rangePatternRev)
-	if m := reRangeRev.FindStringSubmatch(message); len(m) > 2 {
-		start, _ := strconv.Atoi(m[1])
-		end, _ := strconv.Atoi(m[2])
-		if end >= start {
-			return end - start + 1
-		}
-	}
-
-	// Fraction: "1/2 hal"
-	fractionPattern := `(\d+)/(\d+)\s*(?:halaman|hal|hlm)\b`
-	reFraction := regexp.MustCompile(fractionPattern)
-	if m := reFraction.FindStringSubmatch(message); len(m) > 2 {
-		num, _ := strconv.ParseFloat(m[1], 64)
-		den, _ := strconv.ParseFloat(m[2], 64)
-		if den > 0 {
-			return int(num / den)
-		}
-	}
-
-	// Single with decimal: "5.5 halaman", "hal 10"
+func (p *ReportParser) extractPages(message *string) int {
+	total := 0
 	patterns := []string{
+		`(?i)(?:halaman|hal|hlm)\s*(\d+)\s*(?:-+|s/d|sampai|sd|ke|dari)\s*(\d+)`,
+		`(?i)(\d+)\s*(?:-+|s/d|sampai|sd|ke|dari)\s*(\d+)\s*(?:halaman|hal|hlm)`,
+		`(\d+)/(\d+)\s*(?:halaman|hal|hlm)\b`,
 		`(\d+(?:\.\d+)?)\s*(?:halaman|hal|hlm)\b`,
 		`\b(?:halaman|hal|hlm)\s*(\d+(?:\.\d+)?)`,
 	}
 
 	for _, pattern := range patterns {
 		re := regexp.MustCompile(pattern)
-		matches := re.FindStringSubmatch(message)
-		if len(matches) > 1 {
-			if val, err := strconv.ParseFloat(matches[1], 64); err == nil {
-				return int(val)
+		matches := re.FindAllStringSubmatchIndex(*message, -1)
+		for _, loc := range matches {
+			match := (*message)[loc[0]:loc[1]]
+			// Check if already masked
+			if strings.TrimSpace(match) == "" {
+				continue
 			}
+
+			if strings.Contains(pattern, `(\d+)/(\d+)`) {
+				num, _ := strconv.ParseFloat((*message)[loc[2]:loc[3]], 64)
+				den, _ := strconv.ParseFloat((*message)[loc[4]:loc[5]], 64)
+				if den > 0 {
+					total += int(num / den)
+				}
+			} else if strings.Contains(pattern, `(\d+)\s*(?:-+|s/d|sampai|sd|ke|dari)\s*(\d+)`) {
+				start, _ := strconv.Atoi((*message)[loc[2]:loc[3]])
+				end, _ := strconv.Atoi((*message)[loc[4]:loc[5]])
+				if end >= start {
+					total += end - start + 1
+				}
+			} else {
+				if val, err := strconv.ParseFloat((*message)[loc[2]:loc[3]], 64); err == nil {
+					total += int(val)
+				}
+			}
+			*message = (*message)[:loc[0]] + strings.Repeat(" ", loc[1]-loc[0]) + (*message)[loc[1]:]
 		}
 	}
-	return 0
+	return total
 }
 
-func (p *ReportParser) extractJuz(message string) int {
-	// Range: "juz 1-2", "juz 1 s/d 3"
-	rangePattern := `(?i)juz\s*(\d+)\s*(?:-+|s/d|sampai|sd|ke|dari)\s*(\d+)`
-	reRange := regexp.MustCompile(rangePattern)
-	if m := reRange.FindStringSubmatch(message); len(m) > 2 {
-		start, _ := strconv.Atoi(m[1])
-		end, _ := strconv.Atoi(m[2])
-		if end >= start {
-			return (end - start + 1) * 20
-		}
-	}
-
-	// Fraction: "1/2 juz"
-	fractionPattern := `(\d+)/(\d+)\s*juz\b`
-	reFraction := regexp.MustCompile(fractionPattern)
-	if m := reFraction.FindStringSubmatch(message); len(m) > 2 {
-		num, _ := strconv.ParseFloat(m[1], 64)
-		den, _ := strconv.ParseFloat(m[2], 64)
-		if den > 0 {
-			return int(num / den * 20)
-		}
-	}
-
-	// Cardinal with decimal: "1.5 juz", "0.5 juz", "1 juz"
-	// Must have the number BEFORE the word "juz"
-	cardinalPattern := `(\d+(?:\.\d+)?)\s*juz\b`
-	reCardinal := regexp.MustCompile(cardinalPattern)
-	if m := reCardinal.FindStringSubmatch(message); len(m) > 1 {
-		if val, err := strconv.ParseFloat(m[1], 64); err == nil {
-			return int(val * 20)
-		}
-	}
-
-	// Ordinal: "juz 30", "juz 13"
-	// Must have the word "juz" BEFORE the number
-	ordinalPattern := `(?i)\bjuz\s*(\d+)`
-	reOrdinal := regexp.MustCompile(ordinalPattern)
-	if m := reOrdinal.FindStringSubmatch(message); len(m) > 1 {
-		// Found an ordinal juz reference like "juz 13"
-		// This means they finished that 1 juz.
-		return 20
-	}
-
-	if strings.Contains(message, "juz") {
-		return 20
-	}
-
-	return 0
-}
-
-func (p *ReportParser) extractSurahAyah(message string) ParseResult {
-	// Separator pattern for ranges
-	sep := `\s*(?:-+|s/d|sampai|sd|ke|dari)\s*`
-
-	// Multiple patterns to try, ordered from most specific to least specific
+func (p *ReportParser) extractJuz(message *string) []ParseResult {
+	var results []ParseResult
 	patterns := []string{
-		// Pattern 1: "surat/surah <name> [ayat] <start>[-<end>]"
-		`(?i)(?:surat|surah)\s+([a-z\s'-]+?)(?:\s+(?:ayat\s+)?(\d+)(?:` + sep + `(\d+))?)?(?:\s|$)`,
-		// Pattern 2: "<name> ayat <start>[-<end>]" (without surat prefix, but requires 'ayat')
-		`(?i)\b([a-z][a-z\s'-]{2,}?)\s+ayat\s+(\d+)(?:` + sep + `(\d+))?(?:\s|$)`,
-		// Pattern 3: "baca/tilawah <name> <start>[-<end>]"
-		`(?i)(?:baca|tilawah|membaca)\s+([a-z][a-z\s'-]{2,}?)\s+(\d+)(?:` + sep + `(\d+))?(?:\s|$)`,
-		// Pattern 4: Loose match for common surahs followed directly by numbers (e.g., "Yasin 1-10", "Al-Baqarah 255")
-		// Requires at least a range or a number > 1 to avoid matching everything
-		`(?i)\b([a-z][a-z\s'-]{2,}?)\s+(\d+)(?:` + sep + `(\d+))(?:\s|$)`,
-		// Pattern 5: Standalone surah name (e.g., "al mulk", "yasin")
-		// This is the least specific pattern, so it goes last.
-		`(?i)\b([a-z][a-z\s'-]{2,}?)(?:\s|$)`,
+		`(?i)juz\s*(\d+)\s*(?:-+|s/d|sampai|sd|ke|dari)\s*(\d+)`,
+		`(\d+)/(\d+)\s*juz\b`,
+		`(\d+(?:\.\d+)?)\s*juz\b`,
+		`(?i)\bjuz\s*(\d+)`,
 	}
 
 	for _, pattern := range patterns {
 		re := regexp.MustCompile(pattern)
-		matches := re.FindAllStringSubmatch(message, -1)
-
-		for _, match := range matches {
-			if len(match) < 2 {
+		matches := re.FindAllStringSubmatchIndex(*message, -1)
+		for _, loc := range matches {
+			match := (*message)[loc[0]:loc[1]]
+			if strings.TrimSpace(match) == "" {
 				continue
 			}
 
-			fullCapturedName := strings.TrimSpace(match[1])
-			
-			// Try to find surah number, potentially stripping leading words
-			// e.g., "alhamdulillah yasiin" -> "yasiin" -> 36
+			if strings.Contains(pattern, `(\d+)/(\d+)`) {
+				num, _ := strconv.ParseFloat((*message)[loc[2]:loc[3]], 64)
+				den, _ := strconv.ParseFloat((*message)[loc[4]:loc[5]], 64)
+				if den > 0 {
+					results = append(results, ParseResult{IsReport: true, Pages: int(num / den * 20), ReportType: "juz"})
+				}
+			} else if strings.Contains(pattern, `(\d+)\s*(?:-+|s/d|sampai|sd|ke|dari)\s*(\d+)`) {
+				start, _ := strconv.Atoi((*message)[loc[2]:loc[3]])
+				end, _ := strconv.Atoi((*message)[loc[4]:loc[5]])
+				if end >= start {
+					results = append(results, ParseResult{IsReport: true, Pages: (end - start + 1) * 20, ReportType: "juz"})
+				}
+			} else if strings.Contains(pattern, `(\d+(?:\.\d+)?)\s*juz\b`) {
+				if val, err := strconv.ParseFloat((*message)[loc[2]:loc[3]], 64); err == nil {
+					results = append(results, ParseResult{IsReport: true, Pages: int(val * 20), ReportType: "juz"})
+				}
+			} else {
+				results = append(results, ParseResult{IsReport: true, Pages: 20, ReportType: "juz"})
+			}
+			*message = (*message)[:loc[0]] + strings.Repeat(" ", loc[1]-loc[0]) + (*message)[loc[1]:]
+		}
+	}
+	return results
+}
+
+func (p *ReportParser) extractSurahAyah(message *string) []ParseResult {
+	sep := `\s*(?:-+|s/d|sampai|sd|ke|dari)\s*`
+	patterns := []string{
+		`(?i)(?:surat|surah)\s+([a-z\s'-]+?)(?:\s+(?:ayat\s+)?(\d+)(?:` + sep + `(\d+))?)?(?:\b|$)`,
+		`(?i)\b([a-z][a-z\s'-]{2,}?)\s+ayat\s+(\d+)(?:` + sep + `(\d+))?(?:\b|$)`,
+		`(?i)(?:baca|tilawah|membaca)\s+([a-z][a-z\s'-]{2,}?)\s+(\d+)(?:` + sep + `(\d+))?(?:\b|$)`,
+		`(?i)\b([a-z][a-z\s'-]{2,}?)\s+(\d+)(?:` + sep + `(\d+))(?:\b|$)`,
+		`(?i)\b([a-z][a-z\s'-]{2,}?)\b`,
+	}
+
+	var results []ParseResult
+	seenSurahs := make(map[string]bool)
+
+	for _, pattern := range patterns {
+		re := regexp.MustCompile(pattern)
+		matches := re.FindAllStringSubmatchIndex(*message, -1)
+		for _, loc := range matches {
+			if strings.TrimSpace((*message)[loc[0]:loc[1]]) == "" {
+				continue
+			}
+
+			fullCapturedName := strings.TrimSpace((*message)[loc[2]:loc[3]])
 			surahNum := 0
 			words := strings.Fields(fullCapturedName)
+			
 			for i := 0; i < len(words); i++ {
 				candidate := strings.Join(words[i:], " ")
 				surahNum = FindSurahNumber(candidate)
@@ -206,70 +199,46 @@ func (p *ReportParser) extractSurahAyah(message string) ParseResult {
 
 			if surahNum > 0 {
 				officialName := GetSurahName(surahNum)
+				if seenSurahs[officialName] {
+					*message = (*message)[:loc[0]] + strings.Repeat(" ", loc[1]-loc[0]) + (*message)[loc[1]:]
+					continue
+				}
+
 				startAyahStr := ""
 				endAyahStr := ""
-				if len(match) > 2 {
-					startAyahStr = match[2]
-				}
-				if len(match) > 3 {
-					endAyahStr = match[3]
-				}
+				if len(loc) > 4 && loc[4] != -1 { startAyahStr = (*message)[loc[4]:loc[5]] }
+				if len(loc) > 6 && loc[6] != -1 { endAyahStr = (*message)[loc[6]:loc[7]] }
 
 				var startAyah, endAyah int
 				maxAyah := getSurahMaxAyahs(surahNum)
-
 				if startAyahStr != "" {
 					startAyah, _ = strconv.Atoi(startAyahStr)
-					if endAyahStr != "" {
-						endAyah, _ = strconv.Atoi(endAyahStr)
-					} else {
-						endAyah = startAyah
-					}
-				} else {
-					// No ayahs mentioned, get full surah pages
-					startAyah = 1
-					endAyah = maxAyah
-				}
+					if endAyahStr != "" { endAyah, _ = strconv.Atoi(endAyahStr) } else { endAyah = startAyah }
+				} else { startAyah = 1; endAyah = maxAyah }
 
-				// Cap ayahs to valid range
-				if startAyah < 1 {
-					startAyah = 1
-				}
-				if startAyah > maxAyah {
-					startAyah = maxAyah
-				}
-				if endAyah < startAyah {
-					endAyah = startAyah
-				}
-				if endAyah > maxAyah {
-					endAyah = maxAyah
-				}
+				if startAyah < 1 { startAyah = 1 }
+				if startAyah > maxAyah { startAyah = maxAyah }
+				if endAyah < startAyah { endAyah = startAyah }
+				if endAyah > maxAyah { endAyah = maxAyah }
 
-				// Calculate page difference
 				startPage := getAyahPage(surahNum, startAyah)
 				endPage := getAyahPage(surahNum, endAyah)
-
 				pages := 1
 				if startPage > 0 && endPage > 0 {
 					pages = endPage - startPage + 1
-					if pages < 1 {
-						pages = 1
-					}
+					if pages < 1 { pages = 1 }
 				}
 
-				return ParseResult{
-					IsReport:   true,
-					Pages:      pages,
-					SurahName:  officialName,
-					StartAyah:  startAyah,
-					EndAyah:    endAyah,
-					ReportType: "surah",
-				}
+				results = append(results, ParseResult{
+					IsReport: true, Pages: pages, SurahName: officialName,
+					StartAyah: startAyah, EndAyah: endAyah, ReportType: "surah",
+				})
+				seenSurahs[officialName] = true
+				*message = (*message)[:loc[0]] + strings.Repeat(" ", loc[1]-loc[0]) + (*message)[loc[1]:]
 			}
 		}
 	}
-
-	return ParseResult{}
+	return results
 }
 
 // FormatSurahInfo returns a formatted string like "Surat Al-Baqarah ayat 1-30 (5 halaman)"

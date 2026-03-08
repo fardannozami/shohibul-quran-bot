@@ -17,10 +17,18 @@ func NewEngine(repo domain.BotRepository) *Engine {
 	return &Engine{repo: repo}
 }
 
-// ProcessReport computes XP, streaks, and badges for an incoming report.
+// ProcessReports computes XP, streaks, and badges for potentially multiple incoming reports in one message.
 // Returns a structured message string for reporting back to the user.
-func (e *Engine) ProcessReport(ctx context.Context, userID, name string, result parser.ParseResult, messageText string, groupID string) (string, error) {
-	pages := result.Pages
+func (e *Engine) ProcessReports(ctx context.Context, userID, name string, results []parser.ParseResult, messageText string, groupID string) (string, error) {
+	if len(results) == 0 {
+		return "", fmt.Errorf("no parse results to process")
+	}
+
+	totalNewPages := 0
+	for _, r := range results {
+		totalNewPages += r.Pages
+	}
+
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 	yesterday := today.AddDate(0, 0, -1)
@@ -75,7 +83,7 @@ func (e *Engine) ProcessReport(ctx context.Context, userID, name string, result 
 	}
 
 	// Calculate XP: 10 base for reporting + 2 per page
-	xpGained := 10 + (pages * 2)
+	xpGained := 10 + (totalNewPages * 2)
 	streakBonus := 0
 
 	// If this is the first report of the day and they hit a 7-day milestone, give bonus
@@ -101,11 +109,11 @@ func (e *Engine) ProcessReport(ctx context.Context, userID, name string, result 
 			UserID:       userID,
 			GroupID:      groupID,
 			Date:         today,
-			Pages:        pages,
+			Pages:        totalNewPages,
 			ReportsCount: 1,
 		}
 	} else {
-		todayProgress.Pages += pages
+		todayProgress.Pages += totalNewPages
 		todayProgress.ReportsCount += 1
 	}
 
@@ -113,12 +121,12 @@ func (e *Engine) ProcessReport(ctx context.Context, userID, name string, result 
 		return "", err
 	}
 
-	// Insert Report Log
+	// Insert Report Log (one log entry for the whole message)
 	reportLog := &domain.ReportLog{
 		ID:      fmt.Sprintf("%s-%d", userID, now.UnixNano()),
 		UserID:  userID,
 		GroupID: groupID,
-		Pages:   pages,
+		Pages:   totalNewPages,
 		Message: messageText,
 		Date:    now,
 	}
@@ -131,10 +139,15 @@ func (e *Engine) ProcessReport(ctx context.Context, userID, name string, result 
 
 	// Format response message
 	resp := "📖 *Laporan Tilawah*\n"
-	if surahInfo := result.FormatSurahInfo(); surahInfo != "" {
-		resp += fmt.Sprintf("%s: %s (%d hlm)\n", name, surahInfo, pages)
-	} else {
-		resp += fmt.Sprintf("%s: %d hlm\n", name, pages)
+	resp += fmt.Sprintf("*%s*:\n", name)
+	for _, r := range results {
+		if surahInfo := r.FormatSurahInfo(); surahInfo != "" {
+			resp += fmt.Sprintf("- %s (%d hlm)\n", surahInfo, r.Pages)
+		} else if r.ReportType == "juz" {
+			resp += fmt.Sprintf("- %d hlm (Juz)\n", r.Pages)
+		} else {
+			resp += fmt.Sprintf("- %d hlm\n", r.Pages)
+		}
 	}
 	resp += fmt.Sprintf("Total hari ini: *%d hlm*\n", todayProgress.Pages)
 

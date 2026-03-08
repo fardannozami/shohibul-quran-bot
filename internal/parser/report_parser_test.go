@@ -62,19 +62,32 @@ func TestParse(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.message, func(t *testing.T) {
-			result := p.Parse(tt.message)
-
-			if result.IsReport != tt.isReport {
-				t.Errorf("Parse(%q).IsReport = %v; want %v", tt.message, result.IsReport, tt.isReport)
+			results := p.Parse(tt.message)
+			
+			if !tt.isReport {
+				if len(results) > 0 {
+					t.Errorf("Parse(%q) got %d results, want 0", tt.message, len(results))
+				}
+				return
 			}
 
-			// For surah-based tests where we don't know exact pages, skip page check
-			if tt.pages > 0 && result.Pages != tt.pages {
-				t.Errorf("Parse(%q).Pages = %v; want %v", tt.message, result.Pages, tt.pages)
+			if len(results) == 0 {
+				t.Errorf("Parse(%q) got no results, want report", tt.message)
+				return
 			}
 
-			if tt.reportType != "" && result.ReportType != tt.reportType {
-				t.Errorf("Parse(%q).ReportType = %q; want %q", tt.message, result.ReportType, tt.reportType)
+			// Sum total pages for verification
+			totalPages := 0
+			for _, r := range results {
+				totalPages += r.Pages
+			}
+
+			if tt.pages > 0 && totalPages != tt.pages {
+				t.Errorf("Parse(%q).TotalPages = %v; want %v", tt.message, totalPages, tt.pages)
+			}
+
+			if tt.reportType != "" && results[0].ReportType != tt.reportType {
+				t.Errorf("Parse(%q).ReportType = %q; want %q", tt.message, results[0].ReportType, tt.reportType)
 			}
 		})
 	}

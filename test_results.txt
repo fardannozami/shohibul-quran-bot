@@ -1,32 +1,72 @@
-=== RUN   TestFindSurahNumber
-=== RUN   TestFindSurahNumber/Al-Baqarah
-=== RUN   TestFindSurahNumber/baqarah
-=== RUN   TestFindSurahNumber/albaqoroh
-=== RUN   TestFindSurahNumber/Yasin
-=== RUN   TestFindSurahNumber/yasiin
-=== RUN   TestFindSurahNumber/kahfi
-=== RUN   TestFindSurahNumber/Al-Kahfi
-=== RUN   TestFindSurahNumber/rahman
-=== RUN   TestFindSurahNumber/ikhlas
-=== RUN   TestFindSurahNumber/ankaboot
-=== RUN   TestFindSurahNumber/fathia
-    report_parser_test.go:107: FindSurahNumber("fathia") = 35; want 1
-=== RUN   TestFindSurahNumber/rohman
-=== RUN   TestFindSurahNumber/nonexistent
---- FAIL: TestFindSurahNumber (0.00s)
-    --- PASS: TestFindSurahNumber/Al-Baqarah (0.00s)
-    --- PASS: TestFindSurahNumber/baqarah (0.00s)
-    --- PASS: TestFindSurahNumber/albaqoroh (0.00s)
-    --- PASS: TestFindSurahNumber/Yasin (0.00s)
-    --- PASS: TestFindSurahNumber/yasiin (0.00s)
-    --- PASS: TestFindSurahNumber/kahfi (0.00s)
-    --- PASS: TestFindSurahNumber/Al-Kahfi (0.00s)
-    --- PASS: TestFindSurahNumber/rahman (0.00s)
-    --- PASS: TestFindSurahNumber/ikhlas (0.00s)
-    --- PASS: TestFindSurahNumber/ankaboot (0.00s)
-    --- FAIL: TestFindSurahNumber/fathia (0.00s)
-    --- PASS: TestFindSurahNumber/rohman (0.00s)
-    --- PASS: TestFindSurahNumber/nonexistent (0.00s)
-FAIL
-FAIL	github.com/fardannozami/shohibul-quran-bot/internal/parser	0.695s
-FAIL
+=== RUN   TestParse
+=== RUN   TestParse/Alhamdulillah_5_halaman
+=== RUN   TestParse/alhamdulillah_baca_10_hal
+=== RUN   TestParse/alhamdulillah_halaman_2
+=== RUN   TestParse/alhamdulillah_3_hlm
+=== RUN   TestParse/Alhamdulillah_halaman_2-5
+=== RUN   TestParse/Alhamdulillah_10_sampai_15_hal
+=== RUN   TestParse/Alhamdulillah_hal_1_s/d_10
+=== RUN   TestParse/Alhamdulillah_1_juz
+=== RUN   TestParse/Alhamdulillah_1/2_juz
+=== RUN   TestParse/Alhamdulillah_0.5_juz
+=== RUN   TestParse/Alhamdulillah_1.5_juz
+=== RUN   TestParse/Alhamdulillah_juz_1_sampai_2
+=== RUN   TestParse/Alhamdulillah_dari_juz_1_ke_3
+=== RUN   TestParse/alhamdulillah_juz_13
+=== RUN   TestParse/alhamdulillah_juz_13_??????
+=== RUN   TestParse/Alhamdulillah_surat_Al-Baqarah_ayat_1-30
+=== RUN   TestParse/alhamdulillah_surat_yasin
+=== RUN   TestParse/alhamdulillah_surat_kahfi_ayat_1-10
+=== RUN   TestParse/alhamdulillah_albaqoroh_1_s/d_5
+=== RUN   TestParse/alhamdulillah_Ali_Imran_ayat_10_sampai_20
+=== RUN   TestParse/Alhamdulillah_Al_'Ankabut_46_-_79
+=== RUN   TestParse/alhamdulillah_al_mulk
+=== RUN   TestParse/alhamdulillah_yasin
+=== RUN   TestParse/alhamdulillah_asysyuro
+=== RUN   TestParse/alhamdulillah_surat_albaqoroh_ayat_1-30
+=== RUN   TestParse/alhamdulillah_yasiin_1-10
+=== RUN   TestParse/Alhamdulillah_beres
+=== RUN   TestParse/#Alhamdulillah_5_halaman
+=== RUN   TestParse/#Alhamdulillaah_baca_10_hal
+=== RUN   TestParse/Alhamdullilah_3_hlm
+=== RUN   TestParse/al_hamdulillah_beres
+=== RUN   TestParse/alhamdu_lillah_beres
+=== RUN   TestParse/Al-Hamdulillah_beres
+=== RUN   TestParse/Bukan_laporan
+--- PASS: TestParse (0.03s)
+    --- PASS: TestParse/Alhamdulillah_5_halaman (0.00s)
+    --- PASS: TestParse/alhamdulillah_baca_10_hal (0.00s)
+    --- PASS: TestParse/alhamdulillah_halaman_2 (0.00s)
+    --- PASS: TestParse/alhamdulillah_3_hlm (0.00s)
+    --- PASS: TestParse/Alhamdulillah_halaman_2-5 (0.00s)
+    --- PASS: TestParse/Alhamdulillah_10_sampai_15_hal (0.00s)
+    --- PASS: TestParse/Alhamdulillah_hal_1_s/d_10 (0.00s)
+    --- PASS: TestParse/Alhamdulillah_1_juz (0.00s)
+    --- PASS: TestParse/Alhamdulillah_1/2_juz (0.00s)
+    --- PASS: TestParse/Alhamdulillah_0.5_juz (0.00s)
+    --- PASS: TestParse/Alhamdulillah_1.5_juz (0.00s)
+    --- PASS: TestParse/Alhamdulillah_juz_1_sampai_2 (0.00s)
+    --- PASS: TestParse/Alhamdulillah_dari_juz_1_ke_3 (0.00s)
+    --- PASS: TestParse/alhamdulillah_juz_13 (0.00s)
+    --- PASS: TestParse/alhamdulillah_juz_13_?????? (0.00s)
+    --- PASS: TestParse/Alhamdulillah_surat_Al-Baqarah_ayat_1-30 (0.00s)
+    --- PASS: TestParse/alhamdulillah_surat_yasin (0.00s)
+    --- PASS: TestParse/alhamdulillah_surat_kahfi_ayat_1-10 (0.00s)
+    --- PASS: TestParse/alhamdulillah_albaqoroh_1_s/d_5 (0.00s)
+    --- PASS: TestParse/alhamdulillah_Ali_Imran_ayat_10_sampai_20 (0.00s)
+    --- PASS: TestParse/Alhamdulillah_Al_'Ankabut_46_-_79 (0.00s)
+    --- PASS: TestParse/alhamdulillah_al_mulk (0.00s)
+    --- PASS: TestParse/alhamdulillah_yasin (0.00s)
+    --- PASS: TestParse/alhamdulillah_asysyuro (0.00s)
+    --- PASS: TestParse/alhamdulillah_surat_albaqoroh_ayat_1-30 (0.00s)
+    --- PASS: TestParse/alhamdulillah_yasiin_1-10 (0.00s)
+    --- PASS: TestParse/Alhamdulillah_beres (0.00s)
+    --- PASS: TestParse/#Alhamdulillah_5_halaman (0.00s)
+    --- PASS: TestParse/#Alhamdulillaah_baca_10_hal (0.00s)
+    --- PASS: TestParse/Alhamdullilah_3_hlm (0.00s)
+    --- PASS: TestParse/al_hamdulillah_beres (0.00s)
+    --- PASS: TestParse/alhamdu_lillah_beres (0.00s)
+    --- PASS: TestParse/Al-Hamdulillah_beres (0.00s)
+    --- PASS: TestParse/Bukan_laporan (0.00s)
+PASS
+ok  	github.com/fardannozami/shohibul-quran-bot/internal/parser	0.767s

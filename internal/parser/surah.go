@@ -108,7 +108,7 @@ var surahAliases = map[string]int{
 	// Surah 41
 	"fussilat": 41, "fushshilat": 41,
 	// Surah 42
-	"syura": 42, "asysyura": 42, "syuura": 42, "syuro": 42, "asysyuro": 42,
+	"syura": 42, "asysyura": 42, "syuura": 42, "syuro": 42, "asysyuro": 42, "suaro": 42,
 	// Surah 43
 	"zukhruf": 43, "azzukhruf": 43,
 	// Surah 44
@@ -275,6 +275,18 @@ func GetSurahName(surahNum int) string {
 // FindSurahNumber tries to match a given string to a Surah number (1-114). Returns 0 if not found.
 func FindSurahNumber(input string) int {
 	sanitized := sanitizeSurahName(input)
+
+	// Blacklist of common words that should never match a surah
+	noiseWords := map[string]bool{
+		"alhamdulillah": true, "alhamdulilah": true, "alhamdullillah": true,
+		"ayat": true, "surat": true, "surah": true, "juz": true, "juzuk": true,
+		"hal": true, "halaman": true, "hlm": true, "lembar": true,
+		"baca": true, "tilawah": true, "membaca": true,
+		"dan": true, "serta": true, "ke": true, "dari": true, "sampai": true,
+	}
+	if noiseWords[sanitized] {
+		return 0
+	}
 
 	// 1. Check alias map first (handles typos and informal names)
 	if num, ok := surahAliases[sanitized]; ok {
