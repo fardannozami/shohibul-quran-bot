@@ -24,9 +24,9 @@ func TestParse(t *testing.T) {
 
 		// Juz
 		{"Alhamdulillah 1 juz", true, 20, "juz"},
-		{"Alhamdulillah 1/2 juz", true, 10, "juz"}, 
-		{"Alhamdulillah 0.5 juz", true, 10, "juz"}, 
-		{"Alhamdulillah 1.5 juz", true, 30, "juz"}, 
+		{"Alhamdulillah 1/2 juz", true, 10, "juz"},
+		{"Alhamdulillah 0.5 juz", true, 10, "juz"},
+		{"Alhamdulillah 1.5 juz", true, 30, "juz"},
 		{"Alhamdulillah juz 1 sampai 2", true, 40, "juz"},
 		{"Alhamdulillah dari juz 1 ke 3", true, 60, "juz"},
 		{"alhamdulillah juz 13", true, 20, "juz"},
@@ -34,9 +34,9 @@ func TestParse(t *testing.T) {
 
 		// Surah + Ayah
 		{"Alhamdulillah surat Al-Baqarah ayat 1-30", true, 5, "surah"},
-		{"alhamdulillah surat yasin", true, 6, "surah"}, // full surat: pages 440-445
-		{"alhamdulillah surat kahfi ayat 1-10", true, 2, "surah"}, // pages 293-294
-		{"alhamdulillah albaqoroh 1 s/d 5", true, 1, "surah"}, // page 2
+		{"alhamdulillah surat yasin", true, 6, "surah"},                 // full surat: pages 440-445
+		{"alhamdulillah surat kahfi ayat 1-10", true, 2, "surah"},       // pages 293-294
+		{"alhamdulillah albaqoroh 1 s/d 5", true, 1, "surah"},           // page 2
 		{"alhamdulillah Ali Imran ayat 10 sampai 20", true, 2, "surah"}, // pages 51-52
 		{"Alhamdulillah Al 'Ankabut 46 - 79", true, 3, "surah"},         // pages 402-404 (max ayah 69)
 		{"alhamdulillah al mulk", true, 3, "surah"},                     // pages 562-564
@@ -94,6 +94,9 @@ func TestFindSurahNumber(t *testing.T) {
 		{"Al-Kahfi", 18},
 		{"rahman", 55},
 		{"ikhlas", 112},
+		{"ankaboot", 29}, // fuzzy Al-'Ankabut
+		{"fatiha", 1},    // fuzzy Al-Fatihah
+		{"rohman", 55},   // will match Ar-Rahman (score should be high enough)
 		{"nonexistent", 0},
 	}
 

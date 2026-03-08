@@ -1,0 +1,32 @@
+=== RUN   TestFindSurahNumber
+=== RUN   TestFindSurahNumber/Al-Baqarah
+=== RUN   TestFindSurahNumber/baqarah
+=== RUN   TestFindSurahNumber/albaqoroh
+=== RUN   TestFindSurahNumber/Yasin
+=== RUN   TestFindSurahNumber/yasiin
+=== RUN   TestFindSurahNumber/kahfi
+=== RUN   TestFindSurahNumber/Al-Kahfi
+=== RUN   TestFindSurahNumber/rahman
+=== RUN   TestFindSurahNumber/ikhlas
+=== RUN   TestFindSurahNumber/ankaboot
+=== RUN   TestFindSurahNumber/fathia
+    report_parser_test.go:107: FindSurahNumber("fathia") = 35; want 1
+=== RUN   TestFindSurahNumber/rohman
+=== RUN   TestFindSurahNumber/nonexistent
+--- FAIL: TestFindSurahNumber (0.00s)
+    --- PASS: TestFindSurahNumber/Al-Baqarah (0.00s)
+    --- PASS: TestFindSurahNumber/baqarah (0.00s)
+    --- PASS: TestFindSurahNumber/albaqoroh (0.00s)
+    --- PASS: TestFindSurahNumber/Yasin (0.00s)
+    --- PASS: TestFindSurahNumber/yasiin (0.00s)
+    --- PASS: TestFindSurahNumber/kahfi (0.00s)
+    --- PASS: TestFindSurahNumber/Al-Kahfi (0.00s)
+    --- PASS: TestFindSurahNumber/rahman (0.00s)
+    --- PASS: TestFindSurahNumber/ikhlas (0.00s)
+    --- PASS: TestFindSurahNumber/ankaboot (0.00s)
+    --- FAIL: TestFindSurahNumber/fathia (0.00s)
+    --- PASS: TestFindSurahNumber/rohman (0.00s)
+    --- PASS: TestFindSurahNumber/nonexistent (0.00s)
+FAIL
+FAIL	github.com/fardannozami/shohibul-quran-bot/internal/parser	0.695s
+FAIL

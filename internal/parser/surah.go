@@ -26,7 +26,7 @@ var SurahList = []string{
 // This handles common typos and informal names used in WhatsApp groups
 var surahAliases = map[string]int{
 	// Surah 1
-	"fatihah": 1, "alfatihah": 1, "fatiha": 1, "alfatiha": 1,
+	"fatihah": 1, "alfatihah": 1, "fatiha": 1, "alfatiha": 1, "fathia": 1,
 	// Surah 2
 	"baqarah": 2, "albaqarah": 2, "baqoroh": 2, "albaqoroh": 2, "baqara": 2, "bakara": 2, "bakarah": 2, "albaqoro": 2,
 	// Surah 3
@@ -296,5 +296,98 @@ func FindSurahNumber(input string) int {
 		}
 	}
 
+	// 4. Fuzzy Match (Levenshtein Distance) as last fallback
+	// We only do this if the input is at least 3 characters to avoid false positives
+	if len(sanitized) >= 3 {
+		bestMatch := 0
+		bestScore := 0.6 // Minimum threshold
+		bestDist := 999
+
+		// Helper to check and update best match
+		checkMatch := func(target string, num int) {
+			dist := levenshteinDistance(sanitized, target)
+			maxLen := len(sanitized)
+			if len(target) > maxLen {
+				maxLen = len(target)
+			}
+			score := 1.0 - (float64(dist) / float64(maxLen))
+
+			if score > bestScore {
+				bestScore = score
+				bestMatch = num
+				bestDist = dist
+			} else if score == bestScore && dist < bestDist {
+				// Tie-breaker: prefer smaller edit distance
+				bestMatch = num
+				bestDist = dist
+			}
+		}
+
+		for i, surah := range SurahList {
+			checkMatch(sanitizeSurahName(surah), i+1)
+		}
+
+		for alias, num := range surahAliases {
+			checkMatch(alias, num)
+		}
+
+		if bestMatch > 0 {
+			return bestMatch
+		}
+	}
+
 	return 0
+}
+
+// similarity returns a value between 0 and 1 representing the similarity of two strings
+func similarity(s1, s2 string) float64 {
+	if s1 == s2 {
+		return 1.0
+	}
+	if len(s1) == 0 || len(s2) == 0 {
+		return 0.0
+	}
+
+	dist := levenshteinDistance(s1, s2)
+	maxLen := len(s1)
+	if len(s2) > maxLen {
+		maxLen = len(s2)
+	}
+
+	return 1.0 - (float64(dist) / float64(maxLen))
+}
+
+// levenshteinDistance calculates the edit distance between two strings
+func levenshteinDistance(s1, s2 string) int {
+	len1 := len(s1)
+	len2 := len(s2)
+
+	row := make([]int, len2+1)
+	for j := 0; j <= len2; j++ {
+		row[j] = j
+	}
+
+	for i := 1; i <= len1; i++ {
+		prev := i
+		for j := 1; j <= len2; j++ {
+			var val int
+			if s1[i-1] == s2[j-1] {
+				val = row[j-1]
+			} else {
+				min := row[j-1] // substitution
+				if row[j] < min {
+					min = row[j] // deletion
+				}
+				if prev < min {
+					min = prev // insertion
+				}
+				val = min + 1
+			}
+			row[j-1] = prev
+			prev = val
+		}
+		row[len2] = prev
+	}
+
+	return row[len2]
 }
