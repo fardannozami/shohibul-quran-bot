@@ -29,6 +29,7 @@ func (r *BotRepository) InitDatabase(ctx context.Context) error {
 			level INTEGER DEFAULT 1,
 			streak INTEGER DEFAULT 0,
 			joined_at TEXT,
+			daily_target INTEGER DEFAULT 0,
 			PRIMARY KEY (id, group_id)
 		)`,
 		`CREATE TABLE IF NOT EXISTS reports (
@@ -109,9 +110,10 @@ func (r *BotRepository) InitDatabase(ctx context.Context) error {
 					level INTEGER DEFAULT 1,
 					streak INTEGER DEFAULT 0,
 					joined_at TEXT,
+					daily_target INTEGER DEFAULT 0,
 					PRIMARY KEY (id, group_id)
 				)`,
-				"INSERT INTO users (id, group_id, phone, name, xp, level, streak, joined_at) SELECT id, IFNULL(group_id, 'main'), phone, name, xp, level, streak, joined_at FROM users_old",
+				"INSERT INTO users (id, group_id, phone, name, xp, level, streak, joined_at, daily_target) SELECT id, IFNULL(group_id, 'main'), phone, name, xp, level, streak, joined_at, IFNULL(daily_target, 0) FROM users_old",
 				"DROP TABLE users_old",
 			}
 			for _, q := range migrationQueries {
@@ -131,15 +133,18 @@ func (r *BotRepository) InitDatabase(ctx context.Context) error {
 		_, _ = r.db.ExecContext(ctx, q) // ignore error if column already exists
 	}
 
+	// Add daily_target to users if it doesn't exist (simpler check than recreating table if we just need the column)
+	_, _ = r.db.ExecContext(ctx, "ALTER TABLE users ADD COLUMN daily_target INTEGER DEFAULT 0")
+
 	return nil
 }
 
 // User methods
 func (r *BotRepository) GetUser(ctx context.Context, id string, groupID string) (*domain.User, error) {
-	row := r.db.QueryRowContext(ctx, "SELECT id, group_id, phone, name, xp, level, streak, joined_at FROM users WHERE id = ? AND group_id = ?", id, groupID)
+	row := r.db.QueryRowContext(ctx, "SELECT id, group_id, phone, name, xp, level, streak, joined_at, daily_target FROM users WHERE id = ? AND group_id = ?", id, groupID)
 	var u domain.User
 	var joinedAt string
-	err := row.Scan(&u.ID, &u.GroupID, &u.Phone, &u.Name, &u.XP, &u.Level, &u.Streak, &joinedAt)
+	err := row.Scan(&u.ID, &u.GroupID, &u.Phone, &u.Name, &u.XP, &u.Level, &u.Streak, &joinedAt, &u.DailyTarget)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -151,19 +156,19 @@ func (r *BotRepository) GetUser(ctx context.Context, id string, groupID string) 
 }
 
 func (r *BotRepository) CreateUser(ctx context.Context, user *domain.User) error {
-	_, err := r.db.ExecContext(ctx, "INSERT INTO users (id, group_id, phone, name, xp, level, streak, joined_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-		user.ID, user.GroupID, user.Phone, user.Name, user.XP, user.Level, user.Streak, user.JoinedAt.Format(time.RFC3339))
+	_, err := r.db.ExecContext(ctx, "INSERT INTO users (id, group_id, phone, name, xp, level, streak, joined_at, daily_target) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		user.ID, user.GroupID, user.Phone, user.Name, user.XP, user.Level, user.Streak, user.JoinedAt.Format(time.RFC3339), user.DailyTarget)
 	return err
 }
 
 func (r *BotRepository) UpdateUser(ctx context.Context, user *domain.User) error {
-	_, err := r.db.ExecContext(ctx, "UPDATE users SET phone=?, name=?, xp=?, level=?, streak=? WHERE id=? AND group_id=?",
-		user.Phone, user.Name, user.XP, user.Level, user.Streak, user.ID, user.GroupID)
+	_, err := r.db.ExecContext(ctx, "UPDATE users SET phone=?, name=?, xp=?, level=?, streak=?, daily_target=? WHERE id=? AND group_id=?",
+		user.Phone, user.Name, user.XP, user.Level, user.Streak, user.DailyTarget, user.ID, user.GroupID)
 	return err
 }
 
 func (r *BotRepository) GetAllUsers(ctx context.Context, groupID string) ([]*domain.User, error) {
-	rows, err := r.db.QueryContext(ctx, "SELECT id, group_id, phone, name, xp, level, streak, joined_at FROM users WHERE group_id = ?", groupID)
+	rows, err := r.db.QueryContext(ctx, "SELECT id, group_id, phone, name, xp, level, streak, joined_at, daily_target FROM users WHERE group_id = ?", groupID)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +177,7 @@ func (r *BotRepository) GetAllUsers(ctx context.Context, groupID string) ([]*dom
 	for rows.Next() {
 		var u domain.User
 		var joinedAt string
-		if err := rows.Scan(&u.ID, &u.GroupID, &u.Phone, &u.Name, &u.XP, &u.Level, &u.Streak, &joinedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.GroupID, &u.Phone, &u.Name, &u.XP, &u.Level, &u.Streak, &joinedAt, &u.DailyTarget); err != nil {
 			return nil, err
 		}
 		u.JoinedAt, _ = time.Parse(time.RFC3339, joinedAt)

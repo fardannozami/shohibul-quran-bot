@@ -13,7 +13,8 @@ type User struct {
 	XP       int       `json:"xp" db:"xp"`
 	Level    int       `json:"level" db:"level"`
 	Streak   int       `json:"streak" db:"streak"`
-	JoinedAt time.Time `json:"joined_at" db:"joined_at"`
+	JoinedAt    time.Time `json:"joined_at" db:"joined_at"`
+	DailyTarget int       `json:"daily_target" db:"daily_target"`
 }
 
 type UserRepository interface {

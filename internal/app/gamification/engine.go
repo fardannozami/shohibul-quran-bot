@@ -150,6 +150,13 @@ func (e *Engine) ProcessReports(ctx context.Context, userID, name string, result
 		}
 	}
 	resp += fmt.Sprintf("Total hari ini: *%d hlm*\n", todayProgress.Pages)
+	if user.DailyTarget > 0 {
+		status := "⏳"
+		if todayProgress.Pages >= user.DailyTarget {
+			status = "✅"
+		}
+		resp += fmt.Sprintf("🎯 Target harian: %d hlm (%s %d/%d)\n", user.DailyTarget, status, todayProgress.Pages, user.DailyTarget)
+	}
 
 	if isNewStreak && user.Streak == 1 {
 		resp += "🌱 Bismillah, awal istiqomah.\n"

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -47,6 +48,9 @@ func (uc *HandleMessageUsecase) Execute(ctx context.Context, userID, name, messa
 	}
 	if strings.Contains(msg, "#achievements") || strings.Contains(msg, "!achievements") {
 		return uc.handleAchievements(ctx)
+	}
+	if (strings.HasPrefix(msg, "#settarget") || strings.HasPrefix(msg, "!settarget")) && len(msg) > 10 {
+		return uc.handleSetTarget(ctx, userID, name, groupID, message)
 	}
 	if strings.Contains(msg, "!target") {
 		return uc.handleTarget(ctx, groupID)
@@ -206,4 +210,75 @@ func (uc *HandleMessageUsecase) handleAchievements(ctx context.Context) (string,
 	resp += "Terus istiqomah!\nSetiap huruf yang dibaca bernilai kebaikan 🤲"
 
 	return resp, nil
+}
+
+func (uc *HandleMessageUsecase) handleSetTarget(ctx context.Context, userID, name, groupID, message string) (string, error) {
+	// message format: !settarget 1 juz OR !settarget 5 halaman OR !settarget 0
+	msg := strings.TrimSpace(message)
+	parts := strings.Fields(msg)
+	if len(parts) < 2 {
+		return "Format salah. Contoh: `!settarget 1 juz` atau `!settarget 5 halaman` atau `!settarget 0` (untuk menghapus)", nil
+	}
+
+	valStr := parts[1]
+	val, err := strconv.Atoi(valStr)
+	if err != nil {
+		return "Nilai target harus berupa angka. Contoh: `!settarget 20`", nil
+	}
+
+	if val < 0 {
+		return "Nilai target tidak boleh negatif.", nil
+	}
+
+	pages := val
+	unit := ""
+	if len(parts) >= 3 {
+		unit = strings.ToLower(parts[2])
+	}
+
+	if unit == "juz" {
+		pages = val * 20
+	} else if unit == "halaman" || unit == "hal" || unit == "hlm" || unit == "" {
+		pages = val
+	} else {
+		return "Satuan tidak dikenal. Gunakan `juz` atau `halaman`.", nil
+	}
+
+	user, err := uc.repo.GetUser(ctx, userID, groupID)
+	if err != nil {
+		return "", err
+	}
+
+	if user == nil {
+		user = &domain.User{
+			ID:          userID,
+			GroupID:     groupID,
+			Phone:       uc.repo.ResolveLIDToPhone(ctx, userID),
+			Name:        name,
+			XP:          0,
+			Level:       1,
+			Streak:      0,
+			JoinedAt:    time.Now(),
+			DailyTarget: pages,
+		}
+		if err := uc.repo.CreateUser(ctx, user); err != nil {
+			return "", err
+		}
+	} else {
+		user.DailyTarget = pages
+		if err := uc.repo.UpdateUser(ctx, user); err != nil {
+			return "", err
+		}
+	}
+
+	if pages == 0 {
+		return fmt.Sprintf("✅ *%s*, target harianmu telah dihapus.", name), nil
+	}
+
+	targetDesc := fmt.Sprintf("%d halaman", pages)
+	if unit == "juz" {
+		targetDesc = fmt.Sprintf("%d Juz (%d halaman)", val, pages)
+	}
+
+	return fmt.Sprintf("✅ *%s*, target harianmu berhasil diatur: *%s*.\n\nSemoga Allah memudahkan tilawahmu! 🤲", name, targetDesc), nil
 }

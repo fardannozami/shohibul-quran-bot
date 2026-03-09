@@ -1,0 +1,30 @@
+﻿go : # github.com/farda
+nnozami/shohibul-quran-
+bot/internal/app/usecas
+e [github.com/fardannoz
+ami/shohibul-quran-bot/
+internal/app/usecase.te
+st]
+At line:1 char:1
++ go test -v ./internal
+/app/usecase/ 2>&1 | 
+Out-File -FilePath 
+test_err ...
++ ~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: (# github.com/   
+ fa...p/usecase.tes    
+t]:String) [], Rem    
+oteException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
+internal\app\usecase\ha
+ndle_message_usecase_te
+st.go:7:2: "time" 
+imported and not used
+FAIL	github.com/fardannozami/shohibul-quran-bot/internal/app/usecase [build failed]
+FAIL
