@@ -102,87 +102,64 @@ func (p *ReportParser) extractSurahRange(message *string) []ParseResult {
 		wordsBefore := strings.Fields(beforePart)
 		wordsAfter := strings.Fields(afterPart)
 
-		s1, s2 := 0, 0
-		len1, len2 := 0, 0 
-
-		for i := 1; i <= 3 && i <= len(wordsBefore); i++ {
-			candidate := strings.Join(wordsBefore[len(wordsBefore)-i:], " ")
+		s1, s1StartAyah, s1Len := 0, 1, 0
+		// Try to find surah 1. We look at words ending before loc[0].
+		for j := 1; j <= 4 && j <= len(wordsBefore); j++ {
+			candidateWords := wordsBefore[len(wordsBefore)-j:]
+			candidate := strings.Join(candidateWords, " ")
 			if num := FindSurahNumber(candidate); num > 0 {
+				// Check if candidate ends with an ayah number
+				if j > 1 {
+					lastWord := candidateWords[len(candidateWords)-1]
+					if ay, err := strconv.Atoi(lastWord); err == nil {
+						prefix := strings.Join(candidateWords[:len(candidateWords)-1], " ")
+						if pNum := FindSurahNumber(prefix); pNum > 0 {
+							s1 = pNum
+							s1StartAyah = ay
+							s1Len = j
+							break
+						}
+					}
+				}
 				s1 = num
-				len1 = i
+				s1Len = j
+				s1StartAyah = 1
+				break
 			}
 		}
 
-		for i := 1; i <= 3 && i <= len(wordsAfter); i++ {
-			candidate := strings.Join(wordsAfter[:i], " ")
+		s2, s2EndAyah, s2Len := 0, 0, 0
+		// Try to find surah 2. We look at words starting after loc[1].
+		for j := 1; j <= 4 && j <= len(wordsAfter); j++ {
+			candidateWords := wordsAfter[:j]
+			candidate := strings.Join(candidateWords, " ")
 			if num := FindSurahNumber(candidate); num > 0 {
 				s2 = num
-				len2 = i
+				s2Len = j
+				s2EndAyah = getSurahMaxAyahs(num)
+				
+				// Look ahead for "ayat N" or just "N"
+				if len(wordsAfter) > j {
+					if strings.ToLower(wordsAfter[j]) == "ayat" && len(wordsAfter) > j+1 {
+						if ay, err := strconv.Atoi(wordsAfter[j+1]); err == nil {
+							s2EndAyah = ay
+							s2Len = j + 2
+						}
+					} else if ay, err := strconv.Atoi(wordsAfter[j]); err == nil {
+						s2EndAyah = ay
+						s2Len = j + 1
+					}
+				}
+				break
 			}
 		}
 
-		if s1 <= 0 || s2 <= 0 || s2 < s1 {
+		if s1 <= 0 || s2 <= 0 || (s2 < s1 && s2 != 0) {
 			continue
 		}
 
-		// Check for numeric range false positives
-		s1Text_candidate := strings.Join(wordsBefore[len(wordsBefore)-len1:], " ")
-		s2Text_candidate := strings.Join(wordsAfter[:len2], " ")
-		isNumeric1 := regexp.MustCompile(`^\d+$`).MatchString(s1Text_candidate)
-		isNumeric2 := regexp.MustCompile(`^\d+$`).MatchString(s2Text_candidate)
-		// Check for optional "ayat <number>" after s2Text
-		endAyah := 0
-		lenAyah := 0
-		if len(wordsAfter) > len2 {
-			// Check if next word is "ayat"
-			if strings.ToLower(wordsAfter[len2]) == "ayat" {
-				if len(wordsAfter) > len2+1 {
-					if num, err := strconv.Atoi(wordsAfter[len2+1]); err == nil {
-						endAyah = num
-						lenAyah = 2
-					}
-				}
-			} else {
-				// Maybe just a number? e.g. "Al-Baqarah 100" (but wait, we need to be careful with "Al-Baqarah 100-110")
-				// Usually in ranges like "Fatihah sampai Baqarah 100", people might omit 'ayat'.
-				// But let's require 'ayat' for now to be safe, or check if it's a number followed by nothing else.
-				if num, err := strconv.Atoi(wordsAfter[len2]); err == nil {
-					endAyah = num
-					lenAyah = 1
-				}
-			}
-		}
-
-		if isNumeric1 && isNumeric2 {
-			// ... (numeric range check same as before)
-			hasPrefix := false
-			if len(wordsBefore) > len1 {
-				lastWord := strings.ToLower(wordsBefore[len(wordsBefore)-len1-1])
-				if lastWord == "surat" || lastWord == "surah" {
-					hasPrefix = true
-				}
-			}
-			if !hasPrefix {
-				continue
-			}
-		}
-
-		// ... (ayah range false positive check same as before)
-		beforeTrim := strings.TrimSpace(beforePart)
-		if len(beforeTrim) > 0 {
-			lastChar := beforeTrim[len(beforeTrim)-1]
-			if lastChar >= '0' && lastChar <= '9' {
-				continue
-			}
-		}
-
-		startPage := getAyahPage(s1, 1)
-		
-		finalEndAyah := getSurahMaxAyahs(s2)
-		if endAyah > 0 && endAyah <= finalEndAyah {
-			finalEndAyah = endAyah
-		}
-		endPage := getAyahPage(s2, finalEndAyah)
+		startPage := getAyahPage(s1, s1StartAyah)
+		endPage := getAyahPage(s2, s2EndAyah)
 		
 		pages := 1
 		if startPage > 0 && endPage > 0 {
@@ -190,10 +167,15 @@ func (p *ReportParser) extractSurahRange(message *string) []ParseResult {
 			if pages < 1 { pages = 1 }
 		}
 
-		surahName := fmt.Sprintf("%s - %s", GetSurahName(s1), GetSurahName(s2))
-		if endAyah > 0 {
-			surahName = fmt.Sprintf("%s - %s ayat %d", GetSurahName(s1), GetSurahName(s2), endAyah)
+		formatName := func(sNum int, aNum int, isEnd bool) string {
+			name := GetSurahName(sNum)
+			if aNum > 1 || (isEnd && aNum < getSurahMaxAyahs(sNum)) {
+				return fmt.Sprintf("%s ayat %d", name, aNum)
+			}
+			return name
 		}
+
+		surahName := fmt.Sprintf("%s - %s", formatName(s1, s1StartAyah, false), formatName(s2, s2EndAyah, true))
 
 		results = append(results, ParseResult{
 			IsReport:   true,
@@ -202,18 +184,12 @@ func (p *ReportParser) extractSurahRange(message *string) []ParseResult {
 			ReportType: "surah",
 		})
 
-		// Mask the match (s1 text to s2 text + optional ayah index)
-		idx1 := strings.LastIndex(beforePart, s1Text_candidate)
+		// Mask the match
+		s1Text := strings.Join(wordsBefore[len(wordsBefore)-s1Len:], " ")
+		idx1 := strings.LastIndex(beforePart, s1Text)
 		
-		// Recalculate end index including ayah if found
-		endWords := wordsAfter[:len2+lenAyah]
-		// Note: Joining might lose original spacing but strings.Index in afterPart should be fine
-		// if we use a more robust way to find the end position.
-		
-		// Find end of the wordsAfter section we want to mask
-		// A simple way is to find the index of the last word's end.
+		endWords := wordsAfter[:s2Len]
 		lastWordInMatch := endWords[len(endWords)-1]
-		// Start searching for last word after we've seen all preceding words
 		searchOffset := 0
 		for _, w := range endWords[:len(endWords)-1] {
 			if pos := strings.Index(afterPart[searchOffset:], w); pos != -1 {

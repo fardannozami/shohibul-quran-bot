@@ -230,7 +230,7 @@ var surahAliases = map[string]int{
 	// Surah 102
 	"takasur": 102, "attakasur": 102, "takatsur": 102,
 	// Surah 103
-	"asr": 103, "alasr": 103,
+	"asr": 103, "alasr": 103, "ashr": 103, "alashr": 103,
 	// Surah 104
 	"humazah": 104, "alhumazah": 104,
 	// Surah 105
