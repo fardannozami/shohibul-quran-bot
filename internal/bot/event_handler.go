@@ -124,13 +124,13 @@ func (h *EventHandler) SendWelcomeMessage(ctx context.Context, jid types.JID, us
 		"Selamat datang di grup *Shohibul Qur'an*\n\n" +
 		"Semoga kita semua dimudahkan untuk istiqomah membaca Al-Qur'an setiap hari.\n\n" +
 		"📌 *Cara laporan membaca Qur'an:*\n\n" +
-		"Cukup kirim pesan dengan kata:\n" +
-		"\"Alhamdulillah\"\n\n" +
+		"Cukup kirim pesan dengan kata \"Alhamdulillah\" diikuti jumlah atau surah yang dibaca.\n\n" +
 		"Contoh:\n" +
-		"Alhamdulillah sudah baca 2 halaman\n" +
-		"Alhamdulillah 1 juz\n" +
-		"Alhamdulillah sudah mengaji hari ini\n\n" +
-		"Alhamdulillah sudah baca al baqoroh 1 - 30\n\n" +
+		"- Alhamdulillah 2 halaman\n" +
+		"- Alhamdulillah 1 juz\n" +
+		"- Alhamdulillah Al-Fatihah\n" +
+		"- Alhamdulillah Al-Baqarah 1-5\n" +
+		"- Alhamdulillah Al-Ashr ke An-Nas\n\n" +
 		"Bot akan otomatis mencatat laporan Anda.\n\n" +
 		"🎯 *Set Target Harian:*\n" +
 		"Kirim `!settarget 1 juz` atau `!settarget 5 halaman` untuk mengatur target harianmu.\n\n" +

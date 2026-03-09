@@ -9,4 +9,4 @@
     --- PASS: TestHandleSetTarget/Reset_target (0.00s)
     --- PASS: TestHandleSetTarget/Help_command_/_!cara (0.00s)
 PASS
-ok  	github.com/fardannozami/shohibul-quran-bot/internal/app/usecase	0.618s
+ok  	github.com/fardannozami/shohibul-quran-bot/internal/app/usecase	0.622s

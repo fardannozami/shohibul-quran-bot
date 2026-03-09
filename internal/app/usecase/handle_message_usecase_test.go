@@ -87,8 +87,11 @@ func TestHandleSetTarget(t *testing.T) {
 		if !strings.Contains(resp, "CARA PENGGUNAAN") {
 			t.Errorf("expected response to contain 'CARA PENGGUNAAN', got %s", resp)
 		}
-		if !strings.Contains(resp, "!settarget") {
-			t.Errorf("expected response to contain '!settarget', got %s", resp)
+		if !strings.Contains(resp, "Single Surah") {
+			t.Errorf("expected response to contain 'Single Surah', got %s", resp)
+		}
+		if !strings.Contains(resp, "Multiple Surah") {
+			t.Errorf("expected response to contain 'Multiple Surah', got %s", resp)
 		}
 	})
 }
