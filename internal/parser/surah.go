@@ -283,6 +283,7 @@ func FindSurahNumber(input string) int {
 		"hal": true, "halaman": true, "hlm": true, "lembar": true,
 		"baca": true, "tilawah": true, "membaca": true,
 		"dan": true, "serta": true, "ke": true, "dari": true, "sampai": true,
+		"hari": true, "ini": true,
 	}
 	if noiseWords[sanitized] {
 		return 0
