@@ -132,6 +132,9 @@ func (h *EventHandler) SendWelcomeMessage(ctx context.Context, jid types.JID, us
 		"Alhamdulillah sudah mengaji hari ini\n\n" +
 		"Alhamdulillah sudah baca al baqoroh 1 - 30\n\n" +
 		"Bot akan otomatis mencatat laporan Anda.\n\n" +
+		"🎯 *Set Target Harian:*\n" +
+		"Kirim `!settarget 1 juz` atau `!settarget 5 halaman` untuk mengatur target harianmu.\n\n" +
+		"❓ *Bantuan:* Kirim `!cara` untuk melihat daftar lengkap perintah.\n\n" +
 		"⏰ Jika sampai jam 18:00 belum laporan, bot akan mengingatkan.\n\n" +
 		"🎯 *Target kita:*\n" +
 		"Istiqomah membaca Al-Qur'an setiap hari walaupun hanya beberapa ayat.\n\n" +

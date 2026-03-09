@@ -62,7 +62,34 @@ func (uc *HandleMessageUsecase) Execute(ctx context.Context, userID, name, messa
 		return "🌙 *Hadist*\n\n" + uc.motEngine.GetRandomHadith(), nil
 	}
 
+	if strings.Contains(msg, "!cara") || strings.Contains(msg, "#cara") {
+		return uc.handleHelp(), nil
+	}
+
 	return "", nil
+}
+
+func (uc *HandleMessageUsecase) handleHelp() string {
+	resp := "📖 *CARA PENGGUNAAN BOT SHOHIBUL QUR'AN* 📖\n\n"
+	resp += "📌 *Cara Laporan Bacaan:*\n"
+	resp += "Cukup kirim pesan mengandung kata \"Alhamdulillah\" dan jumlah bacaanmu.\n"
+	resp += "Contoh:\n"
+	resp += "- Alhamdulillah sudah baca 2 halaman\n"
+	resp += "- Alhamdulillah 1 juz\n"
+	resp += "- Alhamdulillah Al-Baqarah 1-30\n\n"
+	resp += "🎯 *Cara Atur Target Harian:*\n"
+	resp += "Gunakan perintah `!settarget` diikuti jumlah dan satuan (`juz` atau `halaman`).\n"
+	resp += "Contoh:\n"
+	resp += "- `!settarget 1 juz`\n"
+	resp += "- `!settarget 10 halaman`\n"
+	resp += "- `!settarget 0` (untuk menghapus target)\n\n"
+	resp += "📊 *Perintah Lain:*\n"
+	resp += "- `!stats` atau `#mystats`: Lihat statistik pribadimu\n"
+	resp += "- `!leaderboard`: Lihat peringkat 10 besar\n"
+	resp += "- `!target`: Lihat progress target komunitas\n"
+	resp += "- `!achievements`: Daftar pencapaian yang bisa diraih\n\n"
+	resp += "Semoga bermanfaat! Barakallahu fiikum. 🤍"
+	return resp
 }
 
 func (uc *HandleMessageUsecase) handleTarget(ctx context.Context, groupID string) (string, error) {

@@ -2,9 +2,11 @@
 === RUN   TestHandleSetTarget/Set_target_pages
 === RUN   TestHandleSetTarget/Set_target_juz
 === RUN   TestHandleSetTarget/Reset_target
+=== RUN   TestHandleSetTarget/Help_command_/_!cara
 --- PASS: TestHandleSetTarget (0.00s)
     --- PASS: TestHandleSetTarget/Set_target_pages (0.00s)
     --- PASS: TestHandleSetTarget/Set_target_juz (0.00s)
     --- PASS: TestHandleSetTarget/Reset_target (0.00s)
+    --- PASS: TestHandleSetTarget/Help_command_/_!cara (0.00s)
 PASS
-ok  	github.com/fardannozami/shohibul-quran-bot/internal/app/usecase	0.619s
+ok  	github.com/fardannozami/shohibul-quran-bot/internal/app/usecase	0.618s

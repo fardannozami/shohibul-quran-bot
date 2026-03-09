@@ -79,4 +79,16 @@ func TestHandleSetTarget(t *testing.T) {
 			t.Errorf("expected DailyTarget to be 0, got %d", repo.user.DailyTarget)
 		}
 	})
+	t.Run("Help command / !cara", func(t *testing.T) {
+		resp, err := uc.Execute(ctx, userID, name, "!cara", groupID)
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
+		if !strings.Contains(resp, "CARA PENGGUNAAN") {
+			t.Errorf("expected response to contain 'CARA PENGGUNAAN', got %s", resp)
+		}
+		if !strings.Contains(resp, "!settarget") {
+			t.Errorf("expected response to contain '!settarget', got %s", resp)
+		}
+	})
 }
