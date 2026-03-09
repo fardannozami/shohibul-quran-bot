@@ -87,7 +87,7 @@ func (uc *HandleMessageUsecase) handleHelp() string {
 	resp += "- `!settarget 10 halaman`\n"
 	resp += "- `!settarget 0` (untuk menghapus target)\n\n"
 	resp += "📊 *Perintah Lain:*\n"
-	resp += "- `!stats` atau `#mystats`: Lihat statistik pribadimu\n"
+	resp += "- `!stats` atau `#mystats`: Lihat statistik dan *progress targetmu*\n"
 	resp += "- `!leaderboard`: Lihat peringkat 10 besar\n"
 	resp += "- `!target`: Lihat progress target komunitas\n"
 	resp += "- `!achievements`: Daftar pencapaian yang bisa diraih\n"
@@ -212,6 +212,25 @@ func (uc *HandleMessageUsecase) handleMyStats(ctx context.Context, userID, name 
 	resp += fmt.Sprintf("🕌  Level: *%d*\n", user.Level)
 	resp += fmt.Sprintf("⭐  Total XP: *%d*\n", user.XP)
 	resp += fmt.Sprintf("🔥  Istiqomah: *%d hari*\n", user.Streak)
+
+	if user.DailyTarget > 0 {
+		now := time.Now()
+		today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+		progress, _ := uc.repo.GetDailyProgress(ctx, userID, groupID, today)
+		
+		pagesToday := 0
+		if progress != nil {
+			pagesToday = progress.Pages
+		}
+		
+		status := "⏳"
+		if pagesToday >= user.DailyTarget {
+			status = "✅"
+		}
+		
+		progressBar := uc.generateProgressBar(pagesToday, user.DailyTarget)
+		resp += fmt.Sprintf("🎯  Target: *%d hlm*\n%s %s %d/%d\n", user.DailyTarget, progressBar, status, pagesToday, user.DailyTarget)
+	}
 
 	if len(badges) > 0 {
 		resp += "\n━━━━━━━━━━━━━━━\n"

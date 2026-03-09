@@ -11,4 +11,4 @@
     --- PASS: TestHandleSetTarget/Help_command_/_!cara (0.00s)
     --- PASS: TestHandleSetTarget/Stats_with_target_progress (0.00s)
 PASS
-ok  	github.com/fardannozami/shohibul-quran-bot/internal/app/usecase	1.398s
+ok  	github.com/fardannozami/shohibul-quran-bot/internal/app/usecase	1.322s

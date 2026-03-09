@@ -151,11 +151,12 @@ func (e *Engine) ProcessReports(ctx context.Context, userID, name string, result
 	}
 	resp += fmt.Sprintf("Total hari ini: *%d hlm*\n", todayProgress.Pages)
 	if user.DailyTarget > 0 {
+		progressBar := e.generateProgressBar(todayProgress.Pages, user.DailyTarget)
 		status := "⏳"
 		if todayProgress.Pages >= user.DailyTarget {
 			status = "✅"
 		}
-		resp += fmt.Sprintf("🎯 Target harian: %d hlm (%s %d/%d)\n", user.DailyTarget, status, todayProgress.Pages, user.DailyTarget)
+		resp += fmt.Sprintf("🎯 Target harian: %d hlm\n%s %s %d/%d\n", user.DailyTarget, progressBar, status, todayProgress.Pages, user.DailyTarget)
 	}
 
 	if isNewStreak && user.Streak == 1 {
@@ -226,4 +227,25 @@ func (e *Engine) checkBadges(ctx context.Context, user *domain.User, todayProgre
 		msg += "\n\nSemoga menjadi amal jariyah dan syafaat di hari akhir 🤲"
 	}
 	return msg
+}
+
+func (e *Engine) generateProgressBar(current, target int) string {
+	if target <= 0 {
+		return "[░░░░░░░░░░] 0%"
+	}
+	percent := (current * 100) / target
+	if percent > 100 {
+		percent = 100
+	}
+
+	filled := percent / 10
+	bar := ""
+	for i := 0; i < 10; i++ {
+		if i < filled {
+			bar += "▓"
+		} else {
+			bar += "░"
+		}
+	}
+	return fmt.Sprintf("[%s] %d%%", bar, percent)
 }

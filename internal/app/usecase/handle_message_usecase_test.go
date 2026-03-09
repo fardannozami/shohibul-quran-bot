@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
+
 	"github.com/fardannozami/shohibul-quran-bot/internal/domain"
 )
 
@@ -28,6 +30,14 @@ func (m *mockRepo) UpdateUser(ctx context.Context, user *domain.User) error {
 
 func (m *mockRepo) ResolveLIDToPhone(ctx context.Context, lid string) string {
 	return lid
+}
+
+func (m *mockRepo) GetDailyProgress(ctx context.Context, userID string, groupID string, date time.Time) (*domain.DailyProgress, error) {
+	return nil, nil
+}
+
+func (m *mockRepo) GetBadgesByUser(ctx context.Context, userID string, groupID string) ([]*domain.BadgeLog, error) {
+	return nil, nil
 }
 
 func TestHandleSetTarget(t *testing.T) {
@@ -92,6 +102,19 @@ func TestHandleSetTarget(t *testing.T) {
 		}
 		if !strings.Contains(resp, "Multiple Surah") {
 			t.Errorf("expected response to contain 'Multiple Surah', got %s", resp)
+		}
+	})
+
+	t.Run("Stats with target progress", func(t *testing.T) {
+		// Set target first
+		_, _ = uc.Execute(ctx, userID, name, "!settarget 10", groupID)
+		
+		resp, err := uc.Execute(ctx, userID, name, "!stats", groupID)
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
+		if !strings.Contains(resp, "🎯  Target: *10 hlm*") {
+			t.Errorf("expected response to contain target info, got %s", resp)
 		}
 	})
 }
