@@ -302,11 +302,11 @@ func (p *ReportParser) extractJuz(message *string) []ParseResult {
 func (p *ReportParser) extractSurahAyah(message *string) []ParseResult {
 	sep := `\s*(?:-+|s/d|sampai|sd|ke|dari)\s*`
 	patterns := []string{
-		`(?i)(?:surat|surah)\s+([a-z\s'-]+?)(?:\s+(?:ayat\s+)?(\d+)(?:` + sep + `(\d+))?)?(?:\b|$)`,
-		`(?i)\b([a-z][a-z\s'-]{2,}?)\s+ayat\s+(\d+)(?:` + sep + `(\d+))?(?:\b|$)`,
-		`(?i)(?:baca|tilawah|membaca)\s+([a-z][a-z\s'-]{2,}?)\s+(\d+)(?:` + sep + `(\d+))?(?:\b|$)`,
-		`(?i)\b([a-z][a-z\s'-]{2,}?)\s+(\d+)(?:` + sep + `(\d+))(?:\b|$)`,
-		`(?i)\b([a-z][a-z\s'-]{2,}?)\b`,
+		`(?i)(?:surat|surah)\s+([a-z\s'-]+?)(?:\s+(?:ayat\s+)?(\d+)(?:` + sep + `(\d+))?)?(?:[\s.,!?;:()\[\]"']|$)`,
+		`(?i)\b([a-z][a-z\s'-]{2,}?)\s+ayat\s+(\d+)(?:` + sep + `(\d+))?(?:[\s.,!?;:()\[\]"']|$)`,
+		`(?i)(?:baca|tilawah|membaca)\s+([a-z][a-z\s'-]{2,}?)\s+(\d+)(?:` + sep + `(\d+))?(?:[\s.,!?;:()\[\]"']|$)`,
+		`(?i)\b([a-z][a-z\s'-]{2,}?)\s+(\d+)(?:` + sep + `(\d+))(?:[\s.,!?;:()\[\]"']|$)`,
+		`(?i)\b([a-z][a-z\s'-]{2,}?)(?:[\s.,!?;:()\[\]"']|$)`,
 	}
 
 	var results []ParseResult
