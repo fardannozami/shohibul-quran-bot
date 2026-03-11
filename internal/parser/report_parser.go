@@ -219,7 +219,7 @@ func (p *ReportParser) extractPages(message *string) int {
 		`\b(?:halaman|hal|hlm)\s*(\d+(?:\.\d+)?)`,
 	}
 
-	for _, pattern := range patterns {
+	for i, pattern := range patterns {
 		re := regexp.MustCompile(pattern)
 		matches := re.FindAllStringSubmatchIndex(*message, -1)
 		for _, loc := range matches {
@@ -243,7 +243,11 @@ func (p *ReportParser) extractPages(message *string) int {
 				}
 			} else {
 				if val, err := strconv.ParseFloat((*message)[loc[2]:loc[3]], 64); err == nil {
-					total += int(val)
+					if i == 4 { // "halaman <number>" specifically refers to 1 page
+						total += 1
+					} else {
+						total += int(val)
+					}
 				}
 			}
 			*message = (*message)[:loc[0]] + strings.Repeat(" ", loc[1]-loc[0]) + (*message)[loc[1]:]

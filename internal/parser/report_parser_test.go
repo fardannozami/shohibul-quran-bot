@@ -16,7 +16,7 @@ func TestParse(t *testing.T) {
 		// Halaman
 		{"Alhamdulillah 5 halaman", true, 5, "halaman"},
 		{"alhamdulillah baca 10 hal", true, 10, "halaman"},
-		{"alhamdulillah halaman 2", true, 2, "halaman"},
+		{"alhamdulillah halaman 2", true, 1, "halaman"}, // 'halaman 2' means page 2 (1 page)
 		{"alhamdulillah 3 hlm", true, 3, "halaman"},
 		{"Alhamdulillah halaman 2-5", true, 4, "halaman"},
 		{"Alhamdulillah 10 sampai 15 hal", true, 6, "halaman"},
