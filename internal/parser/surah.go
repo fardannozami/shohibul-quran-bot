@@ -289,34 +289,59 @@ func FindSurahNumber(input string) int {
 		return 0
 	}
 
-	// 1. Check alias map first (handles typos and informal names)
+	// 1. Exact Match on Aliases (handles typos and informal names)
 	if num, ok := surahAliases[sanitized]; ok {
 		return num
 	}
 
-	// 2. Exact match on the official SurahList
+	// 2. Exact Match on Official Names
 	for i, surah := range SurahList {
 		if sanitizeSurahName(surah) == sanitized {
 			return i + 1
 		}
 	}
 
-	// 3. Partial match (e.g. input "baqarah" matches "al-baqarah")
-	for i, surah := range SurahList {
-		official := sanitizeSurahName(surah)
-		if len(sanitized) >= 3 && strings.Contains(official, sanitized) {
-			return i + 1
+	// 3. Prefix Match
+	// We pick the shortest target that matches the prefix to be more exact
+	if len(sanitized) >= 3 {
+		bestPrefixMatch := 0
+		shortestLen := 999
+
+		for i, surah := range SurahList {
+			official := sanitizeSurahName(surah)
+			if strings.HasPrefix(official, sanitized) {
+				if len(official) < shortestLen {
+					shortestLen = len(official)
+					bestPrefixMatch = i + 1
+				} else if len(official) == shortestLen && (bestPrefixMatch == 0 || i+1 < bestPrefixMatch) {
+					bestPrefixMatch = i + 1
+				}
+			}
+		}
+
+		for alias, num := range surahAliases {
+			if strings.HasPrefix(alias, sanitized) {
+				if len(alias) < shortestLen {
+					shortestLen = len(alias)
+					bestPrefixMatch = num
+				} else if len(alias) == shortestLen && (bestPrefixMatch == 0 || num < bestPrefixMatch) {
+					bestPrefixMatch = num
+				}
+			}
+		}
+
+		if bestPrefixMatch > 0 {
+			return bestPrefixMatch
 		}
 	}
 
 	// 4. Fuzzy Match (Levenshtein Distance) as last fallback
-	// We only do this if the input is at least 3 characters to avoid false positives
-	if len(sanitized) >= 3 {
+	// We only do this if the input is at least 4 characters to avoid false positives
+	if len(sanitized) >= 4 {
 		bestMatch := 0
-		bestScore := 0.6 // Minimum threshold
+		bestScore := 0.75 // High threshold for better accuracy
 		bestDist := 999
 
-		// Helper to check and update best match
 		checkMatch := func(target string, num int) {
 			dist := levenshteinDistance(sanitized, target)
 			maxLen := len(sanitized)
@@ -329,10 +354,16 @@ func FindSurahNumber(input string) int {
 				bestScore = score
 				bestMatch = num
 				bestDist = dist
-			} else if score == bestScore && dist < bestDist {
-				// Tie-breaker: prefer smaller edit distance
-				bestMatch = num
-				bestDist = dist
+			} else if score == bestScore {
+				if dist < bestDist {
+					bestMatch = num
+					bestDist = dist
+				} else if dist == bestDist {
+					// Deterministic tie-breaking: prefer lower surah number
+					if bestMatch == 0 || num < bestMatch {
+						bestMatch = num
+					}
+				}
 			}
 		}
 
