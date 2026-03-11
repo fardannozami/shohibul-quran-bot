@@ -76,7 +76,8 @@ var surahAliases = map[string]int{
 	// Surah 25
 	"furqan": 25, "alfurqan": 25, "furqon": 25,
 	// Surah 26
-	"syuara": 26, "asysyuara": 26,
+	"syuara": 26, "asysyuara": 26, "syu'ara": 26, "asysyu'ara": 26, "syuaraa": 26, "asysyuaraa": 26,
+	"syu-ara": 26, "asy-syuara": 26,
 	// Surah 27
 	"naml": 27, "annaml": 27,
 	// Surah 28
@@ -109,6 +110,7 @@ var surahAliases = map[string]int{
 	"fussilat": 41, "fushshilat": 41,
 	// Surah 42
 	"syura": 42, "asysyura": 42, "syuura": 42, "syuro": 42, "asysyuro": 42, "suaro": 42,
+	"asy-syura": 42, "asy-syuro": 42,
 	// Surah 43
 	"zukhruf": 43, "azzukhruf": 43,
 	// Surah 44
@@ -259,7 +261,7 @@ func sanitizeSurahName(name string) string {
 	name = strings.ToLower(name)
 	name = strings.ReplaceAll(name, "-", "")
 	name = strings.ReplaceAll(name, "'", "")
-	name = strings.ReplaceAll(name, "'", "")
+	name = strings.ReplaceAll(name, "’", "") // curly apostrophe
 	name = strings.ReplaceAll(name, " ", "")
 	return name
 }
