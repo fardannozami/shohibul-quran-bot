@@ -37,11 +37,12 @@ func (p *ReportParser) Parse(message string) []ParseResult {
 	originalMessage := message
 	workMsg := strings.ToLower(originalMessage)
 	
-	reListMarker := regexp.MustCompile(`(?m)^\s*\d+[\.\)]\s+`)
+	// Check for lines starting with "N. ", "N) ", or ranges like "1-10. " or even just "- "
+	reListMarker := regexp.MustCompile(`(?m)^[\s\r]*[\d\-\,\*•]+[\.\)]?\s+`)
 	markers := reListMarker.FindAllStringIndex(originalMessage, -1)
 	
-	if len(markers) >= 2 {
-		// It's a list. Take from the last marker onwards.
+	if len(markers) >= 1 {
+		// It's a list or at least has a numbered entry. Take from the last marker onwards.
 		lastMarkerStart := markers[len(markers)-1][0]
 		workMsg = strings.ToLower(originalMessage[lastMarkerStart:])
 	}
@@ -305,8 +306,14 @@ func (p *ReportParser) extractJuz(message *string) []ParseResult {
 			} else if strings.Contains(pattern, `(\d+)\s*(?:-+|s/d|sampai|sd|ke|dari)\s*(\d+)`) {
 				start, _ := strconv.Atoi(workMsg[loc[2]:loc[3]])
 				end, _ := strconv.Atoi(workMsg[loc[4]:loc[5]])
-				if end >= start {
-					results = append(results, ParseResult{IsReport: true, Pages: (end - start + 1) * 20, ReportType: "juz"})
+				if end > 0 && start > 0 {
+					if end < start {
+						// crossover: Juz 30-3 means 30, 1, 2, 3
+						numJuz := (30 - start + 1) + end
+						results = append(results, ParseResult{IsReport: true, Pages: numJuz * 20, ReportType: "juz"})
+					} else {
+						results = append(results, ParseResult{IsReport: true, Pages: (end - start + 1) * 20, ReportType: "juz"})
+					}
 				}
 			} else if strings.Contains(pattern, `(\d+(?:\.\d+)?)\s*juz\b`) {
 				if val, err := strconv.ParseFloat(workMsg[loc[2]:loc[3]], 64); err == nil {

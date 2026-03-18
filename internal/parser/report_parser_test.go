@@ -107,6 +107,21 @@ func TestParse(t *testing.T) {
 1. Juz 1
 2. Juz 2 + Al-Fatihah`, true, 21, "surah"}, // Juz 2 (20) + Al-Fatihah (1) = 21
 
+		// Problematic range-numbered list
+		{`#Alhamdulillah
+Ramadhan hari ke:
+1-10. Juz 29-21 ✅
+11-20. Juz 22-14 ✅
+21. Juz 15-17 ✅
+22. Juz 18-21 ✅
+23. Juz 22-25 ✅
+24. Juz 26-29 ✅
+25. Juz 30-3 ✅
+26. Juz 4-6 ✅
+27. Juz 7-11 ✅
+28. Juz 12-15 ✅
+29. Juz 16-19 ✅`, true, 80, "juz"},
+
 		// Not a report
 		{"Bukan laporan", false, 0, ""},
 	}
