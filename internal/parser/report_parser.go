@@ -257,7 +257,13 @@ func (p *ReportParser) extractPages(message *string) int {
 }
 
 func (p *ReportParser) extractJuz(message *string) []ParseResult {
-	var results []ParseResult
+	type matchInfo struct {
+		result ParseResult
+		start  int
+		end    int
+	}
+	var allMatches []matchInfo
+
 	patterns := []string{
 		`(?i)juz\s*(\d+)\s*(?:-+|s/d|sampai|sd|ke|dari)\s*(\d+)`,
 		`(\d+)/(\d+)\s*juz\b`,
@@ -265,37 +271,91 @@ func (p *ReportParser) extractJuz(message *string) []ParseResult {
 		`(?i)\bjuz\s*(\d+)`,
 	}
 
+	workMsg := *message
 	for _, pattern := range patterns {
 		re := regexp.MustCompile(pattern)
-		matches := re.FindAllStringSubmatchIndex(*message, -1)
+		matches := re.FindAllStringSubmatchIndex(workMsg, -1)
 		for _, loc := range matches {
-			match := (*message)[loc[0]:loc[1]]
-			if strings.TrimSpace(match) == "" {
+			matchText := workMsg[loc[0]:loc[1]]
+			if strings.TrimSpace(matchText) == "" {
 				continue
 			}
 
+			// Check if this area is already masked in workMsg (if we were masking iteratively)
+			// But here we are collecting all first. We should instead mask as we go to avoid overlaps
+			// Or just check if the current loc overlaps with any already found match.
+			overlap := false
+			for _, m := range allMatches {
+				if (loc[0] >= m.start && loc[0] < m.end) || (loc[1] > m.start && loc[1] <= m.end) {
+					overlap = true
+					break
+				}
+			}
+			if overlap {
+				continue
+			}
+
+			var res ParseResult
 			if strings.Contains(pattern, `(\d+)/(\d+)`) {
-				num, _ := strconv.ParseFloat((*message)[loc[2]:loc[3]], 64)
-				den, _ := strconv.ParseFloat((*message)[loc[4]:loc[5]], 64)
+				num, _ := strconv.ParseFloat(workMsg[loc[2]:loc[3]], 64)
+				den, _ := strconv.ParseFloat(workMsg[loc[4]:loc[5]], 64)
 				if den > 0 {
-					results = append(results, ParseResult{IsReport: true, Pages: int(num / den * 20), ReportType: "juz"})
+					res = ParseResult{IsReport: true, Pages: int(num / den * 20), ReportType: "juz"}
 				}
 			} else if strings.Contains(pattern, `(\d+)\s*(?:-+|s/d|sampai|sd|ke|dari)\s*(\d+)`) {
-				start, _ := strconv.Atoi((*message)[loc[2]:loc[3]])
-				end, _ := strconv.Atoi((*message)[loc[4]:loc[5]])
+				start, _ := strconv.Atoi(workMsg[loc[2]:loc[3]])
+				end, _ := strconv.Atoi(workMsg[loc[4]:loc[5]])
 				if end >= start {
-					results = append(results, ParseResult{IsReport: true, Pages: (end - start + 1) * 20, ReportType: "juz"})
+					res = ParseResult{IsReport: true, Pages: (end - start + 1) * 20, ReportType: "juz"}
 				}
 			} else if strings.Contains(pattern, `(\d+(?:\.\d+)?)\s*juz\b`) {
-				if val, err := strconv.ParseFloat((*message)[loc[2]:loc[3]], 64); err == nil {
-					results = append(results, ParseResult{IsReport: true, Pages: int(val * 20), ReportType: "juz"})
+				if val, err := strconv.ParseFloat(workMsg[loc[2]:loc[3]], 64); err == nil {
+					res = ParseResult{IsReport: true, Pages: int(val * 20), ReportType: "juz"}
 				}
 			} else {
-				results = append(results, ParseResult{IsReport: true, Pages: 20, ReportType: "juz"})
+				res = ParseResult{IsReport: true, Pages: 20, ReportType: "juz"}
 			}
-			*message = (*message)[:loc[0]] + strings.Repeat(" ", loc[1]-loc[0]) + (*message)[loc[1]:]
+
+			if res.IsReport {
+				allMatches = append(allMatches, matchInfo{result: res, start: loc[0], end: loc[1]})
+			}
 		}
 	}
+
+	if len(allMatches) == 0 {
+		return nil
+	}
+
+	// Sort matches by their start position
+	for i := 0; i < len(allMatches); i++ {
+		for j := i + 1; j < len(allMatches); j++ {
+			if allMatches[i].start > allMatches[j].start {
+				allMatches[i], allMatches[j] = allMatches[j], allMatches[i]
+			}
+		}
+	}
+
+	var results []ParseResult
+	
+	// Heuristic for list: multiple matches and many newlines OR starts with number + dot
+	isList := len(allMatches) > 2 || strings.Count(workMsg, "\n") > 5
+	
+	if isList {
+		// Only take the last one
+		lastMatch := allMatches[len(allMatches)-1]
+		results = append(results, lastMatch.result)
+		// Mask only the last one? Or mask all? 
+		// If it's a list, we probably want to mask everything to avoid double counting if other parsers run
+		for _, m := range allMatches {
+			*message = (*message)[:m.start] + strings.Repeat(" ", m.end-m.start) + (*message)[m.end:]
+		}
+	} else {
+		for _, m := range allMatches {
+			results = append(results, m.result)
+			*message = (*message)[:m.start] + strings.Repeat(" ", m.end-m.start) + (*message)[m.end:]
+		}
+	}
+
 	return results
 }
 
