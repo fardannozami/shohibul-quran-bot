@@ -32,10 +32,21 @@ func (p *ReportParser) Parse(message string) []ParseResult {
 		return nil
 	}
 
-	var results []ParseResult
+	// 0. Global List Detection
+	// If it's a progress log (numbered list), we only parse from the last entry onwards.
+	originalMessage := message
+	workMsg := strings.ToLower(originalMessage)
 	
-	// We use a copy of the message that we'll modify (consume)
-	workMsg := strings.ToLower(message)
+	reListMarker := regexp.MustCompile(`(?m)^\s*\d+[\.\)]\s+`)
+	markers := reListMarker.FindAllStringIndex(originalMessage, -1)
+	
+	if len(markers) >= 2 {
+		// It's a list. Take from the last marker onwards.
+		lastMarkerStart := markers[len(markers)-1][0]
+		workMsg = strings.ToLower(originalMessage[lastMarkerStart:])
+	}
+
+	var results []ParseResult
 
 	// 1. Try surah range (e.g. Al-Ashr - An-Nas)
 	rangeResults := p.extractSurahRange(&workMsg)
@@ -56,7 +67,6 @@ func (p *ReportParser) Parse(message string) []ParseResult {
 	}
 
 	// 3. Try halaman
-	// Always try extractPages even if we found surah/juz, but it will use the remaining workMsg
 	if pages := p.extractPages(&workMsg); pages > 0 {
 		results = append(results, ParseResult{IsReport: true, Pages: pages, ReportType: "halaman"})
 	}
@@ -257,18 +267,12 @@ func (p *ReportParser) extractPages(message *string) int {
 }
 
 func (p *ReportParser) extractJuz(message *string) []ParseResult {
-	type matchInfo struct {
-		result ParseResult
-		start  int
-		end    int
-	}
-	var allMatches []matchInfo
-
+	var results []ParseResult
 	patterns := []string{
 		`(?i)juz\s*(\d+)\s*(?:-+|s/d|sampai|sd|ke|dari)\s*(\d+)`,
 		`(\d+)/(\d+)\s*juz\b`,
 		`(\d+(?:\.\d+)?)\s*juz\b`,
-		`(?i)\bjuz\s*(\d+)`,
+		`(?i)\bjuz\s*(\d+(?:(?:[,\s]+)\d+)*)`,
 	}
 
 	workMsg := *message
@@ -276,86 +280,44 @@ func (p *ReportParser) extractJuz(message *string) []ParseResult {
 		re := regexp.MustCompile(pattern)
 		matches := re.FindAllStringSubmatchIndex(workMsg, -1)
 		for _, loc := range matches {
-			matchText := workMsg[loc[0]:loc[1]]
-			if strings.TrimSpace(matchText) == "" {
+			if strings.TrimSpace(workMsg[loc[0]:loc[1]]) == "" {
 				continue
 			}
 
-			// Check if this area is already masked in workMsg (if we were masking iteratively)
-			// But here we are collecting all first. We should instead mask as we go to avoid overlaps
-			// Or just check if the current loc overlaps with any already found match.
-			overlap := false
-			for _, m := range allMatches {
-				if (loc[0] >= m.start && loc[0] < m.end) || (loc[1] > m.start && loc[1] <= m.end) {
-					overlap = true
-					break
+			if strings.Contains(pattern, `\bjuz\s*(\d+`) {
+				rawNums := workMsg[loc[2]:loc[3]]
+				sep := regexp.MustCompile(`[,\s]+`)
+				parts := sep.Split(rawNums, -1)
+				for _, part := range parts {
+					if part == "" {
+						continue
+					}
+					if _, err := strconv.Atoi(part); err == nil {
+						results = append(results, ParseResult{IsReport: true, Pages: 20, ReportType: "juz"})
+					}
 				}
-			}
-			if overlap {
-				continue
-			}
-
-			var res ParseResult
-			if strings.Contains(pattern, `(\d+)/(\d+)`) {
+			} else if strings.Contains(pattern, `(\d+)/(\d+)`) {
 				num, _ := strconv.ParseFloat(workMsg[loc[2]:loc[3]], 64)
 				den, _ := strconv.ParseFloat(workMsg[loc[4]:loc[5]], 64)
 				if den > 0 {
-					res = ParseResult{IsReport: true, Pages: int(num / den * 20), ReportType: "juz"}
+					results = append(results, ParseResult{IsReport: true, Pages: int(num / den * 20), ReportType: "juz"})
 				}
 			} else if strings.Contains(pattern, `(\d+)\s*(?:-+|s/d|sampai|sd|ke|dari)\s*(\d+)`) {
 				start, _ := strconv.Atoi(workMsg[loc[2]:loc[3]])
 				end, _ := strconv.Atoi(workMsg[loc[4]:loc[5]])
 				if end >= start {
-					res = ParseResult{IsReport: true, Pages: (end - start + 1) * 20, ReportType: "juz"}
+					results = append(results, ParseResult{IsReport: true, Pages: (end - start + 1) * 20, ReportType: "juz"})
 				}
 			} else if strings.Contains(pattern, `(\d+(?:\.\d+)?)\s*juz\b`) {
 				if val, err := strconv.ParseFloat(workMsg[loc[2]:loc[3]], 64); err == nil {
-					res = ParseResult{IsReport: true, Pages: int(val * 20), ReportType: "juz"}
+					results = append(results, ParseResult{IsReport: true, Pages: int(val * 20), ReportType: "juz"})
 				}
-			} else {
-				res = ParseResult{IsReport: true, Pages: 20, ReportType: "juz"}
 			}
-
-			if res.IsReport {
-				allMatches = append(allMatches, matchInfo{result: res, start: loc[0], end: loc[1]})
-			}
+			
+			workMsg = workMsg[:loc[0]] + strings.Repeat(" ", loc[1]-loc[0]) + workMsg[loc[1]:]
 		}
 	}
-
-	if len(allMatches) == 0 {
-		return nil
-	}
-
-	// Sort matches by their start position
-	for i := 0; i < len(allMatches); i++ {
-		for j := i + 1; j < len(allMatches); j++ {
-			if allMatches[i].start > allMatches[j].start {
-				allMatches[i], allMatches[j] = allMatches[j], allMatches[i]
-			}
-		}
-	}
-
-	var results []ParseResult
-	
-	// Heuristic for list: multiple matches and many newlines OR starts with number + dot
-	isList := len(allMatches) > 2 || strings.Count(workMsg, "\n") > 5
-	
-	if isList {
-		// Only take the last one
-		lastMatch := allMatches[len(allMatches)-1]
-		results = append(results, lastMatch.result)
-		// Mask only the last one? Or mask all? 
-		// If it's a list, we probably want to mask everything to avoid double counting if other parsers run
-		for _, m := range allMatches {
-			*message = (*message)[:m.start] + strings.Repeat(" ", m.end-m.start) + (*message)[m.end:]
-		}
-	} else {
-		for _, m := range allMatches {
-			results = append(results, m.result)
-			*message = (*message)[:m.start] + strings.Repeat(" ", m.end-m.start) + (*message)[m.end:]
-		}
-	}
-
+	*message = workMsg
 	return results
 }
 

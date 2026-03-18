@@ -98,6 +98,15 @@ func TestParse(t *testing.T) {
 28. Juz 2✅
 29. Juz 3✅`, true, 20, "juz"},
 
+		// Comma separated Juz
+		{"Alhamdulillah juz 1, 2, 3", true, 60, "juz"},
+		{"Alhamdulillah juz 15,16,17,18", true, 80, "juz"},
+
+		// Mixed report list (take latest)
+		{`#Alhamdulillah
+1. Juz 1
+2. Juz 2 + Al-Fatihah`, true, 21, "surah"}, // Juz 2 (20) + Al-Fatihah (1) = 21
+
 		// Not a report
 		{"Bukan laporan", false, 0, ""},
 	}
