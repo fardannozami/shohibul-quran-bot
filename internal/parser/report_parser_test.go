@@ -193,3 +193,30 @@ func TestFindSurahNumber(t *testing.T) {
 		})
 	}
 }
+
+func TestExtractDuration(t *testing.T) {
+	p := NewReportParser()
+
+	tests := []struct {
+		message  string
+		expected int
+	}{
+		{"Alhamdulillah 5 halaman, 15 menit tilawah", 15},
+		{"alhamdulillah 2 juz, 1 jam 30 menit", 90},
+		{"Alhamdulillah yasin 1.5 jam", 90},
+		{"Alhamdulillah yasin 1,5 jam", 90},
+		{"Alhamdulillah 1 jam", 60},
+		{"Alhamdulillah 30 menit", 30},
+		{"Alhamdulillah tanpa waktu", 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.message, func(t *testing.T) {
+			msgCopy := tt.message
+			got := p.extractDuration(&msgCopy)
+			if got != tt.expected {
+				t.Errorf("extractDuration(%q) = %d; want %d", tt.message, got, tt.expected)
+			}
+		})
+	}
+}

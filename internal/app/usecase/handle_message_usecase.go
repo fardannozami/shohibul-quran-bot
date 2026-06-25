@@ -220,8 +220,10 @@ func (uc *HandleMessageUsecase) handleMyStats(ctx context.Context, userID, name 
 		progress, _ := uc.repo.GetDailyProgress(ctx, userID, groupID, today)
 		
 		pagesToday := 0
+		durationToday := 0
 		if progress != nil {
 			pagesToday = progress.Pages
+			durationToday = progress.DurationMinutes
 		}
 		
 		status := "⏳"
@@ -230,7 +232,11 @@ func (uc *HandleMessageUsecase) handleMyStats(ctx context.Context, userID, name 
 		}
 		
 		progressBar := uc.generateProgressBar(pagesToday, user.DailyTarget)
-		resp += fmt.Sprintf("🎯  Target: *%d hlm*\n%s %s %d/%d\n", user.DailyTarget, progressBar, status, pagesToday, user.DailyTarget)
+		if durationToday > 0 {
+			resp += fmt.Sprintf("🎯  Target: *%d hlm*\n%s %s %d/%d (⏱️ %d menit)\n", user.DailyTarget, progressBar, status, pagesToday, user.DailyTarget, durationToday)
+		} else {
+			resp += fmt.Sprintf("🎯  Target: *%d hlm*\n%s %s %d/%d\n", user.DailyTarget, progressBar, status, pagesToday, user.DailyTarget)
+		}
 	}
 
 	if len(badges) > 0 {

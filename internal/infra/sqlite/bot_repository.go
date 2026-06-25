@@ -128,6 +128,8 @@ func (r *BotRepository) InitDatabase(ctx context.Context) error {
 	alterQueries := []string{
 		"ALTER TABLE reports ADD COLUMN group_id TEXT",
 		"ALTER TABLE badges ADD COLUMN group_id TEXT",
+		"ALTER TABLE reports ADD COLUMN duration_minutes INTEGER DEFAULT 0",
+		"ALTER TABLE daily_progress ADD COLUMN duration_minutes INTEGER DEFAULT 0",
 	}
 	for _, q := range alterQueries {
 		_, _ = r.db.ExecContext(ctx, q) // ignore error if column already exists
@@ -197,13 +199,13 @@ func (r *BotRepository) ResolveLIDToPhone(ctx context.Context, lid string) strin
 
 // ReportLog methods
 func (r *BotRepository) InsertReport(ctx context.Context, report *domain.ReportLog) error {
-	_, err := r.db.ExecContext(ctx, "INSERT INTO reports (id, user_id, group_id, pages, message, date) VALUES (?, ?, ?, ?, ?, ?)",
-		report.ID, report.UserID, report.GroupID, report.Pages, report.Message, report.Date.Format(time.RFC3339))
+	_, err := r.db.ExecContext(ctx, "INSERT INTO reports (id, user_id, group_id, pages, duration_minutes, message, date) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		report.ID, report.UserID, report.GroupID, report.Pages, report.DurationMinutes, report.Message, report.Date.Format(time.RFC3339))
 	return err
 }
 
 func (r *BotRepository) GetReportsByUser(ctx context.Context, userID string, groupID string) ([]*domain.ReportLog, error) {
-	rows, err := r.db.QueryContext(ctx, "SELECT id, user_id, group_id, pages, message, date FROM reports WHERE user_id = ? AND group_id = ? ORDER BY date DESC", userID, groupID)
+	rows, err := r.db.QueryContext(ctx, "SELECT id, user_id, group_id, pages, duration_minutes, message, date FROM reports WHERE user_id = ? AND group_id = ? ORDER BY date DESC", userID, groupID)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +214,7 @@ func (r *BotRepository) GetReportsByUser(ctx context.Context, userID string, gro
 	for rows.Next() {
 		var log domain.ReportLog
 		var date string
-		if err := rows.Scan(&log.ID, &log.UserID, &log.GroupID, &log.Pages, &log.Message, &date); err != nil {
+		if err := rows.Scan(&log.ID, &log.UserID, &log.GroupID, &log.Pages, &log.DurationMinutes, &log.Message, &date); err != nil {
 			return nil, err
 		}
 		log.Date, _ = time.Parse(time.RFC3339, date)
@@ -224,10 +226,10 @@ func (r *BotRepository) GetReportsByUser(ctx context.Context, userID string, gro
 // DailyProgress methods
 func (r *BotRepository) GetDailyProgress(ctx context.Context, userID string, groupID string, date time.Time) (*domain.DailyProgress, error) {
 	dateStr := date.Format("2006-01-02")
-	row := r.db.QueryRowContext(ctx, "SELECT user_id, group_id, date, pages, reports_count FROM daily_progress WHERE user_id = ? AND group_id = ? AND date = ?", userID, groupID, dateStr)
+	row := r.db.QueryRowContext(ctx, "SELECT user_id, group_id, date, pages, duration_minutes, reports_count FROM daily_progress WHERE user_id = ? AND group_id = ? AND date = ?", userID, groupID, dateStr)
 	var dp domain.DailyProgress
 	var dStr string
-	err := row.Scan(&dp.UserID, &dp.GroupID, &dStr, &dp.Pages, &dp.ReportsCount)
+	err := row.Scan(&dp.UserID, &dp.GroupID, &dStr, &dp.Pages, &dp.DurationMinutes, &dp.ReportsCount)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -241,12 +243,13 @@ func (r *BotRepository) GetDailyProgress(ctx context.Context, userID string, gro
 func (r *BotRepository) UpsertDailyProgress(ctx context.Context, progress *domain.DailyProgress) error {
 	dateStr := progress.Date.Format("2006-01-02")
 	_, err := r.db.ExecContext(ctx, `
-		INSERT INTO daily_progress (user_id, group_id, date, pages, reports_count)
-		VALUES (?, ?, ?, ?, ?)
+		INSERT INTO daily_progress (user_id, group_id, date, pages, duration_minutes, reports_count)
+		VALUES (?, ?, ?, ?, ?, ?)
 		ON CONFLICT(user_id, date, group_id) DO UPDATE SET
 			pages = excluded.pages,
+			duration_minutes = excluded.duration_minutes,
 			reports_count = excluded.reports_count
-	`, progress.UserID, progress.GroupID, dateStr, progress.Pages, progress.ReportsCount)
+	`, progress.UserID, progress.GroupID, dateStr, progress.Pages, progress.DurationMinutes, progress.ReportsCount)
 	return err
 }
 

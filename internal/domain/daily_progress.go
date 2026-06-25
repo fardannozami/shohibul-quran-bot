@@ -9,8 +9,9 @@ type DailyProgress struct {
 	UserID       string    `json:"user_id" db:"user_id"`
 	GroupID      string    `json:"group_id" db:"group_id"`
 	Date         time.Time `json:"date" db:"date"`
-	Pages        int       `json:"pages" db:"pages"`
-	ReportsCount int       `json:"reports_count" db:"reports_count"`
+	Pages           int       `json:"pages" db:"pages"`
+	DurationMinutes int       `json:"duration_minutes" db:"duration_minutes"`
+	ReportsCount    int       `json:"reports_count" db:"reports_count"`
 }
 
 type DailyProgressRepository interface {

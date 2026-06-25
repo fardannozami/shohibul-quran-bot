@@ -13,8 +13,9 @@ type ParseResult struct {
 	Pages      int
 	SurahName  string // e.g. "Al-Baqarah" (empty if not surah-based)
 	StartAyah  int    // e.g. 1 (0 if not surah-based)
-	EndAyah    int    // e.g. 30 (0 if not surah-based)
-	ReportType string // "halaman", "juz", "surah", or "default"
+	EndAyah         int    // e.g. 30 (0 if not surah-based)
+	ReportType      string // "halaman", "juz", "surah", or "default"
+	DurationMinutes int    // e.g. 15 (0 if not specified)
 }
 
 // ReportParser handles parsing of chat messages to detect reading activity
@@ -77,9 +78,17 @@ func (p *ReportParser) Parse(message string) []ParseResult {
 		results = append(results, ParseResult{IsReport: true, Pages: pages, ReportType: "halaman"})
 	}
 
-	// 4. Default: assume 1 page if alhamdulillah detected but no specific info found
+	// 5. Default: assume 1 page if alhamdulillah detected but no specific info found
 	if len(results) == 0 {
 		results = append(results, ParseResult{IsReport: true, Pages: 1, ReportType: "default"})
+	}
+
+	// 6. Extract duration globally
+	duration := p.extractDuration(&workMsg)
+	if duration > 0 && len(results) > 0 {
+		for i := range results {
+			results[i].DurationMinutes = duration
+		}
 	}
 
 	return results
@@ -501,4 +510,47 @@ func getSurahMaxAyahs(surahNum int) int {
 		return maxAyah
 	}
 	return 1
+}
+
+// extractDuration finds patterns like "1 jam 30 menit", "1.5 jam", "15 menit"
+func (p *ReportParser) extractDuration(message *string) int {
+	totalMinutes := 0
+
+	// 1. Check for "X jam Y menit"
+	reJamMenit := regexp.MustCompile(`(?i)(\d+)\s*jam\s+(\d+)\s*menit`)
+	if loc := reJamMenit.FindStringSubmatchIndex(*message); loc != nil {
+		jam, _ := strconv.Atoi((*message)[loc[2]:loc[3]])
+		menit, _ := strconv.Atoi((*message)[loc[4]:loc[5]])
+		totalMinutes += (jam * 60) + menit
+		*message = (*message)[:loc[0]] + strings.Repeat(" ", loc[1]-loc[0]) + (*message)[loc[1]:]
+		return totalMinutes
+	}
+
+	// 2. Check for "X.X jam" or "X,X jam"
+	reJamDecimal := regexp.MustCompile(`(?i)(\d+[.,]\d+)\s*jam`)
+	if loc := reJamDecimal.FindStringSubmatchIndex(*message); loc != nil {
+		valStr := strings.ReplaceAll((*message)[loc[2]:loc[3]], ",", ".")
+		val, _ := strconv.ParseFloat(valStr, 64)
+		totalMinutes += int(val * 60)
+		*message = (*message)[:loc[0]] + strings.Repeat(" ", loc[1]-loc[0]) + (*message)[loc[1]:]
+		return totalMinutes
+	}
+
+	// 3. Check for "X jam"
+	reJam := regexp.MustCompile(`(?i)(\d+)\s*jam`)
+	if loc := reJam.FindStringSubmatchIndex(*message); loc != nil {
+		jam, _ := strconv.Atoi((*message)[loc[2]:loc[3]])
+		totalMinutes += jam * 60
+		*message = (*message)[:loc[0]] + strings.Repeat(" ", loc[1]-loc[0]) + (*message)[loc[1]:]
+	}
+
+	// 4. Check for "X menit"
+	reMenit := regexp.MustCompile(`(?i)(\d+)\s*menit`)
+	if loc := reMenit.FindStringSubmatchIndex(*message); loc != nil {
+		menit, _ := strconv.Atoi((*message)[loc[2]:loc[3]])
+		totalMinutes += menit
+		*message = (*message)[:loc[0]] + strings.Repeat(" ", loc[1]-loc[0]) + (*message)[loc[1]:]
+	}
+
+	return totalMinutes
 }

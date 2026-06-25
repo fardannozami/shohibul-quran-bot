@@ -25,8 +25,12 @@ func (e *Engine) ProcessReports(ctx context.Context, userID, name string, result
 	}
 
 	totalNewPages := 0
+	durationMinutes := 0
 	for _, r := range results {
 		totalNewPages += r.Pages
+		if r.DurationMinutes > durationMinutes {
+			durationMinutes = r.DurationMinutes
+		}
 	}
 
 	now := time.Now()
@@ -106,14 +110,16 @@ func (e *Engine) ProcessReports(ctx context.Context, userID, name string, result
 	// Update Daily Progress
 	if todayProgress == nil {
 		todayProgress = &domain.DailyProgress{
-			UserID:       userID,
-			GroupID:      groupID,
-			Date:         today,
-			Pages:        totalNewPages,
-			ReportsCount: 1,
+			UserID:          userID,
+			GroupID:         groupID,
+			Date:            today,
+			Pages:           totalNewPages,
+			DurationMinutes: durationMinutes,
+			ReportsCount:    1,
 		}
 	} else {
 		todayProgress.Pages += totalNewPages
+		todayProgress.DurationMinutes += durationMinutes
 		todayProgress.ReportsCount += 1
 	}
 
@@ -123,12 +129,13 @@ func (e *Engine) ProcessReports(ctx context.Context, userID, name string, result
 
 	// Insert Report Log (one log entry for the whole message)
 	reportLog := &domain.ReportLog{
-		ID:      fmt.Sprintf("%s-%d", userID, now.UnixNano()),
-		UserID:  userID,
-		GroupID: groupID,
-		Pages:   totalNewPages,
-		Message: messageText,
-		Date:    now,
+		ID:              fmt.Sprintf("%s-%d", userID, now.UnixNano()),
+		UserID:          userID,
+		GroupID:         groupID,
+		Pages:           totalNewPages,
+		DurationMinutes: durationMinutes,
+		Message:         messageText,
+		Date:            now,
 	}
 	if err := e.repo.InsertReport(ctx, reportLog); err != nil {
 		return "", err
@@ -149,7 +156,11 @@ func (e *Engine) ProcessReports(ctx context.Context, userID, name string, result
 			resp += fmt.Sprintf("- %d hlm\n", r.Pages)
 		}
 	}
-	resp += fmt.Sprintf("Total hari ini: *%d hlm*\n", todayProgress.Pages)
+	if todayProgress.DurationMinutes > 0 {
+		resp += fmt.Sprintf("Total hari ini: *%d hlm* (⏱️ %d menit)\n", todayProgress.Pages, todayProgress.DurationMinutes)
+	} else {
+		resp += fmt.Sprintf("Total hari ini: *%d hlm*\n", todayProgress.Pages)
+	}
 	if user.DailyTarget > 0 {
 		progressBar := e.generateProgressBar(todayProgress.Pages, user.DailyTarget)
 		status := "⏳"

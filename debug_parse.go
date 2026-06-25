@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"shohibul-quran-bot/internal/parser"
+	"github.com/fardannozami/shohibul-quran-bot/internal/parser"
 )
 
 func main() {

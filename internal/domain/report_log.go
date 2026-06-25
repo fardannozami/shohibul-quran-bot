@@ -9,9 +9,10 @@ type ReportLog struct {
 	ID      string    `json:"id" db:"id"`
 	UserID  string    `json:"user_id" db:"user_id"`
 	GroupID string    `json:"group_id" db:"group_id"`
-	Pages   int       `json:"pages" db:"pages"`
-	Message string    `json:"message" db:"message"`
-	Date    time.Time `json:"date" db:"date"`
+	Pages           int       `json:"pages" db:"pages"`
+	DurationMinutes int       `json:"duration_minutes" db:"duration_minutes"`
+	Message         string    `json:"message" db:"message"`
+	Date            time.Time `json:"date" db:"date"`
 }
 
 type ReportLogRepository interface {
