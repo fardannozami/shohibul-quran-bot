@@ -24,6 +24,11 @@ func TestParse(t *testing.T) {
 		{"alhamdulillah 4 halaman hari ini", true, 4, "halaman"},
 		{"alhamdulillah 4 halaman tadi malam", true, 4, "halaman"},
 
+		// Lembar
+		{"Alhamdulillah 2 lembar", true, 4, "lembar"},
+		{"alhamdulillah baca 3 lbr", true, 6, "lembar"},
+		{"alhamdulillah lembar 2-5", true, 8, "lembar"},
+
 		// Juz
 		{"Alhamdulillah 1 juz", true, 20, "juz"},
 		{"Alhamdulillah 1/2 juz", true, 10, "juz"},

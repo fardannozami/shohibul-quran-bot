@@ -67,7 +67,12 @@ func (p *ReportParser) Parse(message string) []ParseResult {
 		results = append(results, juzResults...)
 	}
 
-	// 3. Try halaman
+	// 3. Try lembar
+	if sheets := p.extractLembar(&workMsg); sheets > 0 {
+		results = append(results, ParseResult{IsReport: true, Pages: sheets * 2, ReportType: "lembar"})
+	}
+
+	// 4. Try halaman
 	if pages := p.extractPages(&workMsg); pages > 0 {
 		results = append(results, ParseResult{IsReport: true, Pages: pages, ReportType: "halaman"})
 	}
@@ -255,6 +260,53 @@ func (p *ReportParser) extractPages(message *string) int {
 			} else {
 				if val, err := strconv.ParseFloat((*message)[loc[2]:loc[3]], 64); err == nil {
 					if i == 4 { // "halaman <number>" specifically refers to 1 page
+						total += 1
+					} else {
+						total += int(val)
+					}
+				}
+			}
+			*message = (*message)[:loc[0]] + strings.Repeat(" ", loc[1]-loc[0]) + (*message)[loc[1]:]
+		}
+	}
+	return total
+}
+
+func (p *ReportParser) extractLembar(message *string) int {
+	total := 0
+	patterns := []string{
+		`(?i)(?:lembar|lbr)\s*(\d+)\s*(?:-+|s/d|sampai|sd|ke|dari)\s*(\d+)`,
+		`(?i)(\d+)\s*(?:-+|s/d|sampai|sd|ke|dari)\s*(\d+)\s*(?:lembar|lbr)`,
+		`(\d+)/(\d+)\s*(?:lembar|lbr)\b`,
+		`(\d+(?:\.\d+)?)\s*(?:lembar|lbr)\b`,
+		`\b(?:lembar|lbr)\s*(\d+(?:\.\d+)?)`,
+	}
+
+	for i, pattern := range patterns {
+		re := regexp.MustCompile(pattern)
+		matches := re.FindAllStringSubmatchIndex(*message, -1)
+		for _, loc := range matches {
+			match := (*message)[loc[0]:loc[1]]
+			// Check if already masked
+			if strings.TrimSpace(match) == "" {
+				continue
+			}
+
+			if strings.Contains(pattern, `(\d+)/(\d+)`) {
+				num, _ := strconv.ParseFloat((*message)[loc[2]:loc[3]], 64)
+				den, _ := strconv.ParseFloat((*message)[loc[4]:loc[5]], 64)
+				if den > 0 {
+					total += int(num / den)
+				}
+			} else if strings.Contains(pattern, `(\d+)\s*(?:-+|s/d|sampai|sd|ke|dari)\s*(\d+)`) {
+				start, _ := strconv.Atoi((*message)[loc[2]:loc[3]])
+				end, _ := strconv.Atoi((*message)[loc[4]:loc[5]])
+				if end >= start {
+					total += end - start + 1
+				}
+			} else {
+				if val, err := strconv.ParseFloat((*message)[loc[2]:loc[3]], 64); err == nil {
+					if i == 4 { // "lembar <number>" specifically refers to 1 sheet
 						total += 1
 					} else {
 						total += int(val)

@@ -74,17 +74,18 @@ func (uc *HandleMessageUsecase) handleHelp() string {
 	resp += "📌 *Cara Laporan Bacaan:*\n"
 	resp += "Cukup kirim pesan mengandung kata \"Alhamdulillah\".\n"
 	resp += "Contoh Format:\n"
-	resp += "- *Halaman*: `Alhamdulillah 5 halaman`\n"
+	resp += "- *Halaman/Lembar*: `Alhamdulillah 5 halaman` atau `Alhamdulillah 2 lembar`\n"
 	resp += "- *Juz*: `Alhamdulillah 1 juz` atau `Alhamdulillah juz 30`\n"
 	resp += "- *Single Surah*: `Alhamdulillah Al-Fatihah`\n"
 	resp += "- *Surah & Ayat*: `Alhamdulillah Al-Baqarah 1-5`\n"
 	resp += "- *Multiple Surah*: `Alhamdulillah Al-Ashr, Al-Ikhlas, An-Nas`\n"
 	resp += "- *Surah Range*: `Alhamdulillah Al-Ashr sampai An-Nas`\n\n"
 	resp += "🎯 *Cara Atur Target Harian:*\n"
-	resp += "Gunakan perintah `!settarget` diikuti jumlah dan satuan (`juz` atau `halaman`).\n"
+	resp += "Gunakan perintah `!settarget` diikuti jumlah dan satuan (`juz`, `halaman`, atau `lembar`).\n"
 	resp += "Contoh:\n"
 	resp += "- `!settarget 1 juz`\n"
 	resp += "- `!settarget 10 halaman`\n"
+	resp += "- `!settarget 2 lembar`\n"
 	resp += "- `!settarget 0` (untuk menghapus target)\n\n"
 	resp += "📊 *Perintah Lain:*\n"
 	resp += "- `!stats` atau `#mystats`: Lihat statistik dan *progress targetmu*\n"
@@ -267,7 +268,7 @@ func (uc *HandleMessageUsecase) handleSetTarget(ctx context.Context, userID, nam
 	msg := strings.TrimSpace(message)
 	parts := strings.Fields(msg)
 	if len(parts) < 2 {
-		return "Format salah. Contoh: `!settarget 1 juz` atau `!settarget 5 halaman` atau `!settarget 0` (untuk menghapus)", nil
+		return "Format salah. Contoh: `!settarget 1 juz`, `!settarget 5 halaman`, `!settarget 2 lembar`, atau `!settarget 0` (untuk menghapus)", nil
 	}
 
 	valStr := parts[1]
@@ -290,8 +291,10 @@ func (uc *HandleMessageUsecase) handleSetTarget(ctx context.Context, userID, nam
 		pages = val * 20
 	} else if unit == "halaman" || unit == "hal" || unit == "hlm" || unit == "" {
 		pages = val
+	} else if unit == "lembar" || unit == "lbr" {
+		pages = val * 2
 	} else {
-		return "Satuan tidak dikenal. Gunakan `juz` atau `halaman`.", nil
+		return "Satuan tidak dikenal. Gunakan `juz`, `halaman`, atau `lembar`.", nil
 	}
 
 	user, err := uc.repo.GetUser(ctx, userID, groupID)
@@ -328,6 +331,8 @@ func (uc *HandleMessageUsecase) handleSetTarget(ctx context.Context, userID, nam
 	targetDesc := fmt.Sprintf("%d halaman", pages)
 	if unit == "juz" {
 		targetDesc = fmt.Sprintf("%d Juz (%d halaman)", val, pages)
+	} else if unit == "lembar" || unit == "lbr" {
+		targetDesc = fmt.Sprintf("%d lembar (%d halaman)", val, pages)
 	}
 
 	return fmt.Sprintf("✅ *%s*, target harianmu berhasil diatur: *%s*.\n\nSemoga Allah memudahkan tilawahmu! 🤲", name, targetDesc), nil
