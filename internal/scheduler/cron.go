@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/fardannozami/shohibul-quran-bot/internal/app/motivation"
+	"github.com/fardannozami/shohibul-quran-bot/internal/app/prayer"
 	"github.com/fardannozami/shohibul-quran-bot/internal/domain"
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/proto/waE2E"
@@ -15,18 +16,20 @@ import (
 )
 
 type CronService struct {
-	client    *whatsmeow.Client
-	repo      domain.BotRepository
-	motEngine *motivation.Engine
-	groupIDs  []string
+	client      *whatsmeow.Client
+	repo        domain.BotRepository
+	motEngine   *motivation.Engine
+	prayerEngine *prayer.Engine
+	groupIDs    []string
 }
 
-func NewCronService(client *whatsmeow.Client, repo domain.BotRepository, motEngine *motivation.Engine, groupIDs []string) *CronService {
+func NewCronService(client *whatsmeow.Client, repo domain.BotRepository, motEngine *motivation.Engine, prayerEngine *prayer.Engine, groupIDs []string) *CronService {
 	return &CronService{
-		client:    client,
-		repo:      repo,
-		motEngine: motEngine,
-		groupIDs:  groupIDs,
+		client:      client,
+		repo:        repo,
+		motEngine:   motEngine,
+		prayerEngine: prayerEngine,
+		groupIDs:    groupIDs,
 	}
 }
 
@@ -38,6 +41,7 @@ func (s *CronService) Start(ctx context.Context) {
 
 	go s.runReminderJob(ctx)
 	go s.runMotivationJob(ctx)
+	go s.runPrayerNotificationJob(ctx)
 }
 
 func (s *CronService) runReminderJob(ctx context.Context) {
@@ -157,6 +161,69 @@ func (s *CronService) runMotivationJob(ctx context.Context) {
 			}
 		}
 	}
+}
+
+func (s *CronService) runPrayerNotificationJob(ctx context.Context) {
+	for {
+		now := time.Now()
+
+		// Find next prayer notification time
+		nextPrayerTime := s.findNextPrayerTime(now)
+		duration := nextPrayerTime.Sub(now)
+
+		log.Printf("Next prayer notification at %v", nextPrayerTime)
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(duration):
+			s.executePrayerNotification(ctx, nextPrayerTime)
+		}
+	}
+}
+
+func (s *CronService) findNextPrayerTime(now time.Time) time.Time {
+	notifications := s.prayerEngine.GetAllNotifications()
+
+	// Parse all notification times and find the next one
+	for _, n := range notifications {
+		hour, minute := parseTime(n.Time)
+		target := time.Date(now.Year(), now.Month(), now.Day(), hour, minute, 0, 0, now.Location())
+		if target.After(now) {
+			return target
+		}
+	}
+
+	// If all times have passed today, schedule for tomorrow's first notification
+	firstNotification := notifications[0]
+	hour, minute := parseTime(firstNotification.Time)
+	target := time.Date(now.Year(), now.Month(), now.Day()+1, hour, minute, 0, 0, now.Location())
+	return target
+}
+
+func (s *CronService) executePrayerNotification(ctx context.Context, scheduledTime time.Time) {
+	hour := scheduledTime.Hour()
+	minute := scheduledTime.Minute()
+
+	notification := s.prayerEngine.GetNotificationByTime(hour, minute)
+	if notification == nil {
+		return
+	}
+
+	log.Printf("Executing prayer notification: %s", notification.Name)
+
+	keutamaan := s.prayerEngine.GetRandomKeutamaan(notification)
+	msg := fmt.Sprintf("%s\n\n*Keutamaan %s:*\n%s\n\nSemoga kita semua dilimpahkan keberkahan dan istiqamah dalam beribadah. 🤲", notification.Message, notification.Name, keutamaan)
+
+	for _, gid := range s.groupIDs {
+		s.sendToGroup(ctx, gid, msg, nil)
+	}
+}
+
+func parseTime(timeStr string) (int, int) {
+	var hour, minute int
+	fmt.Sscanf(timeStr, "%d:%d", &hour, &minute)
+	return hour, minute
 }
 
 func (s *CronService) sendMessage(ctx context.Context, text string, mentions []string) {
