@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/fardannozami/shohibul-quran-bot/internal/app/kajian"
 	"github.com/fardannozami/shohibul-quran-bot/internal/app/motivation"
 	"github.com/fardannozami/shohibul-quran-bot/internal/app/prayer"
 	"github.com/fardannozami/shohibul-quran-bot/internal/domain"
@@ -20,15 +21,17 @@ type CronService struct {
 	repo        domain.BotRepository
 	motEngine   *motivation.Engine
 	prayerEngine *prayer.Engine
+	kajianEngine *kajian.Engine
 	groupIDs    []string
 }
 
-func NewCronService(client *whatsmeow.Client, repo domain.BotRepository, motEngine *motivation.Engine, prayerEngine *prayer.Engine, groupIDs []string) *CronService {
+func NewCronService(client *whatsmeow.Client, repo domain.BotRepository, motEngine *motivation.Engine, prayerEngine *prayer.Engine, kajianEngine *kajian.Engine, groupIDs []string) *CronService {
 	return &CronService{
 		client:      client,
 		repo:        repo,
 		motEngine:   motEngine,
 		prayerEngine: prayerEngine,
+		kajianEngine: kajianEngine,
 		groupIDs:    groupIDs,
 	}
 }
@@ -42,6 +45,7 @@ func (s *CronService) Start(ctx context.Context) {
 	go s.runReminderJob(ctx)
 	go s.runMotivationJob(ctx)
 	go s.runPrayerNotificationJob(ctx)
+	go s.runKajianJob(ctx)
 }
 
 func (s *CronService) runReminderJob(ctx context.Context) {
@@ -224,6 +228,36 @@ func parseTime(timeStr string) (int, int) {
 	var hour, minute int
 	fmt.Sscanf(timeStr, "%d:%d", &hour, &minute)
 	return hour, minute
+}
+
+func (s *CronService) runKajianJob(ctx context.Context) {
+	for {
+		now := time.Now()
+		// Schedule kajian for 07:00 every day
+		target := time.Date(now.Year(), now.Month(), now.Day(), 7, 0, 0, 0, now.Location())
+		if now.After(target) {
+			target = target.AddDate(0, 0, 1)
+		}
+
+		duration := target.Sub(now)
+		log.Printf("Next kajian notification at %v", target)
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(duration):
+			s.executeKajianNotification(ctx)
+		}
+	}
+}
+
+func (s *CronService) executeKajianNotification(ctx context.Context) {
+	log.Println("Executing daily kajian notification...")
+
+	msg := s.kajianEngine.GetRandomKajian()
+	for _, gid := range s.groupIDs {
+		s.sendToGroup(ctx, gid, msg, nil)
+	}
 }
 
 func (s *CronService) sendMessage(ctx context.Context, text string, mentions []string) {
