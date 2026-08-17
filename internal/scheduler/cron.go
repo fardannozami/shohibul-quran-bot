@@ -10,6 +10,7 @@ import (
 	"github.com/fardannozami/shohibul-quran-bot/internal/app/kajian"
 	"github.com/fardannozami/shohibul-quran-bot/internal/app/motivation"
 	"github.com/fardannozami/shohibul-quran-bot/internal/app/prayer"
+	"github.com/fardannozami/shohibul-quran-bot/internal/app/sunnah"
 	"github.com/fardannozami/shohibul-quran-bot/internal/domain"
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/proto/waE2E"
@@ -17,22 +18,24 @@ import (
 )
 
 type CronService struct {
-	client      *whatsmeow.Client
-	repo        domain.BotRepository
-	motEngine   *motivation.Engine
+	client       *whatsmeow.Client
+	repo         domain.BotRepository
+	motEngine    *motivation.Engine
 	prayerEngine *prayer.Engine
 	kajianEngine *kajian.Engine
-	groupIDs    []string
+	sunnahEngine *sunnah.Engine
+	groupIDs     []string
 }
 
-func NewCronService(client *whatsmeow.Client, repo domain.BotRepository, motEngine *motivation.Engine, prayerEngine *prayer.Engine, kajianEngine *kajian.Engine, groupIDs []string) *CronService {
+func NewCronService(client *whatsmeow.Client, repo domain.BotRepository, motEngine *motivation.Engine, prayerEngine *prayer.Engine, kajianEngine *kajian.Engine, sunnahEngine *sunnah.Engine, groupIDs []string) *CronService {
 	return &CronService{
-		client:      client,
-		repo:        repo,
-		motEngine:   motEngine,
+		client:       client,
+		repo:         repo,
+		motEngine:    motEngine,
 		prayerEngine: prayerEngine,
 		kajianEngine: kajianEngine,
-		groupIDs:    groupIDs,
+		sunnahEngine: sunnahEngine,
+		groupIDs:     groupIDs,
 	}
 }
 
@@ -46,6 +49,8 @@ func (s *CronService) Start(ctx context.Context) {
 	go s.runMotivationJob(ctx)
 	go s.runPrayerNotificationJob(ctx)
 	go s.runKajianJob(ctx)
+	go s.runSleepSunnahJob(ctx)
+	go s.runMalamJumatJob(ctx)
 }
 
 func (s *CronService) runReminderJob(ctx context.Context) {
@@ -228,6 +233,81 @@ func parseTime(timeStr string) (int, int) {
 	var hour, minute int
 	fmt.Sscanf(timeStr, "%d:%d", &hour, &minute)
 	return hour, minute
+}
+
+func (s *CronService) runSleepSunnahJob(ctx context.Context) {
+	for {
+		now := time.Now()
+		target := time.Date(now.Year(), now.Month(), now.Day(), 21, 00, 0, 0, now.Location())
+		if now.After(target) {
+			target = target.AddDate(0, 0, 1)
+		}
+
+		duration := target.Sub(now)
+		log.Printf("Next sleep sunnah notification at %v", target)
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(duration):
+			s.executeSleepSunnah(ctx)
+		}
+	}
+}
+
+func (s *CronService) executeSleepSunnah(ctx context.Context) {
+	log.Println("Executing sleep sunnah notification...")
+
+	sunnah := s.sunnahEngine.GetRandomSleepSunnah()
+	msg := fmt.Sprintf("🌙 *Sunnah Sebelum Tidur* 🌙\n\n*%s*\n\n%s\n\nSemoga kita semua istiqamah dalam mengamalkan sunnah Nabi SAW. 🤲", sunnah.Title, sunnah.Message)
+
+	for _, gid := range s.groupIDs {
+		s.sendToGroup(ctx, gid, msg, nil)
+	}
+}
+
+func (s *CronService) runMalamJumatJob(ctx context.Context) {
+	for {
+		now := time.Now()
+
+		// Malam Jum'at = Kamis malam, yaitu hari ke-5 dalam seminggu (0=Ahad, 4=Kamis)
+		// Kita hitung berapa hari lagi sampai Kamis malam
+		daysUntilThursday := (4 - int(now.Weekday()) + 7) % 7
+		if daysUntilThursday == 0 && now.Hour() >= 20 {
+			// Sudah lewat Kamis malam ini, jadwalkan minggu depan
+			daysUntilThursday = 7
+		}
+
+		target := time.Date(now.Year(), now.Month(), now.Day()+daysUntilThursday, 20, 0, 0, 0, now.Location())
+		duration := target.Sub(now)
+		log.Printf("Next malam Jum'at notification at %v", target)
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(duration):
+			s.executeMalamJumat(ctx)
+		}
+	}
+}
+
+func (s *CronService) executeMalamJumat(ctx context.Context) {
+	log.Println("Executing malam Jum'at notification...")
+
+	day := s.sunnahEngine.GetSpecialDay("Malam Jum'at")
+	if day == nil {
+		return
+	}
+
+	msg := fmt.Sprintf("🌙 *%s* 🌙\n\n%s\n\n", day.Name, day.Message)
+	for i, item := range day.Items {
+		msg += fmt.Sprintf("%d. %s\n\n", i+1, item)
+	}
+	msg += "Semoga kita semua dapat mengamalkannya. 🤲"
+
+	for _, gid := range s.groupIDs {
+		s.sendToGroup(ctx, gid, msg, nil)
+	}
 }
 
 func (s *CronService) runKajianJob(ctx context.Context) {

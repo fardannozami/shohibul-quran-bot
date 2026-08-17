@@ -14,6 +14,7 @@ import (
 	"github.com/fardannozami/shohibul-quran-bot/internal/app/kajian"
 	"github.com/fardannozami/shohibul-quran-bot/internal/app/motivation"
 	"github.com/fardannozami/shohibul-quran-bot/internal/app/prayer"
+	"github.com/fardannozami/shohibul-quran-bot/internal/app/sunnah"
 	"github.com/fardannozami/shohibul-quran-bot/internal/app/usecase"
 	"github.com/fardannozami/shohibul-quran-bot/internal/bot"
 	"github.com/fardannozami/shohibul-quran-bot/internal/config"
@@ -45,6 +46,7 @@ func main() {
 	motEngine := motivation.NewEngine()
 	prayerEngine := prayer.NewEngine()
 	kajianEngine := kajian.NewEngine()
+	sunnahEngine := sunnah.NewEngine()
 	handleMessageUC := usecase.NewHandleMessageUsecase(repo, parserMod, gameEngine, motEngine)
 
 	// 5. WhatsApp Service
@@ -52,7 +54,7 @@ func main() {
 
 	// 5.5 Wait until client is ready or expose it to handlers
 	welcomeHandler := bot.NewEventHandler(nil, cfg.GroupIDs) // We will inject client later after waService is initialized.
-	cronService := scheduler.NewCronService(nil, repo, motEngine, prayerEngine, kajianEngine, cfg.GroupIDs)
+	cronService := scheduler.NewCronService(nil, repo, motEngine, prayerEngine, kajianEngine, sunnahEngine, cfg.GroupIDs)
 
 	// 6. Register Message Handler
 	waService.SetMessageHandler(func(ctx context.Context, client *whatsmeow.Client, evt *events.Message) {
@@ -191,7 +193,7 @@ func main() {
 	})
 
 	welcomeHandler = bot.NewEventHandler(waService.GetClient(), cfg.GroupIDs)
-	cronService = scheduler.NewCronService(waService.GetClient(), repo, motEngine, prayerEngine, kajianEngine, cfg.GroupIDs)
+	cronService = scheduler.NewCronService(waService.GetClient(), repo, motEngine, prayerEngine, kajianEngine, sunnahEngine, cfg.GroupIDs)
 	
 	// Start Scheduler
 	cronCtx, cronCancel := context.WithCancel(context.Background())
