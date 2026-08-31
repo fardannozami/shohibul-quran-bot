@@ -194,20 +194,34 @@ func (s *CronService) runPrayerNotificationJob(ctx context.Context) {
 func (s *CronService) findNextPrayerTime(now time.Time) time.Time {
 	notifications := s.prayerEngine.GetAllNotifications()
 
-	// Parse all notification times and find the next one
+	var earliestAfterNow time.Time
+	found := false
+
 	for _, n := range notifications {
 		hour, minute := parseTime(n.Time)
 		target := time.Date(now.Year(), now.Month(), now.Day(), hour, minute, 0, 0, now.Location())
 		if target.After(now) {
-			return target
+			if !found || target.Before(earliestAfterNow) {
+				earliestAfterNow = target
+				found = true
+			}
 		}
 	}
 
-	// If all times have passed today, schedule for tomorrow's first notification
-	firstNotification := notifications[0]
-	hour, minute := parseTime(firstNotification.Time)
-	target := time.Date(now.Year(), now.Month(), now.Day()+1, hour, minute, 0, 0, now.Location())
-	return target
+	if found {
+		return earliestAfterNow
+	}
+
+	// If all times have passed today, schedule for tomorrow's earliest notification
+	var earliestTomorrow time.Time
+	for i, n := range notifications {
+		hour, minute := parseTime(n.Time)
+		target := time.Date(now.Year(), now.Month(), now.Day()+1, hour, minute, 0, 0, now.Location())
+		if i == 0 || target.Before(earliestTomorrow) {
+			earliestTomorrow = target
+		}
+	}
+	return earliestTomorrow
 }
 
 func (s *CronService) executePrayerNotification(ctx context.Context, scheduledTime time.Time) {
