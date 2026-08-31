@@ -27,9 +27,9 @@ func NewReportParser() *ReportParser {
 
 // Parse determines if the message contains a valid report and returns a slice of ParseResult
 func (p *ReportParser) Parse(message string) []ParseResult {
-	// Must contain alhamdulillah (flexible match)
-	alhamdulillahRegex := regexp.MustCompile(`(?i)#?al[ -]?hamdu?[ -]?l+il+a+h`)
-	if !alhamdulillahRegex.MatchString(message) {
+	// Must start with alhamdulillah (flexible match)
+	alhamdulillahRegex := regexp.MustCompile(`(?i)^#?\s*al[ -]?hamdu?[ -]?l+il+a+h`)
+	if !alhamdulillahRegex.MatchString(strings.TrimSpace(message)) {
 		return nil
 	}
 

@@ -129,6 +129,9 @@ Ramadhan hari ke:
 
 		// Not a report
 		{"Bukan laporan", false, 0, ""},
+		{"sudah baca alhamdulillah", false, 0, ""},
+		{"terima kasih, alhamdulillah 5 halaman", false, 0, ""},
+		{"ini bukan laporan, alhamdulillah beres", false, 0, ""},
 	}
 
 	for _, tt := range tests {
