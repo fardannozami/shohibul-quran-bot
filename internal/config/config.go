@@ -14,6 +14,7 @@ type Config struct {
 	SQLitePath      string
 	SupabaseURL     string
 	SupabaseKey     string
+	GeminiAPIKey    string
 	GroupIDs        []string
 	BotPhone        string
 	ReplyDelayMinMs int  // Minimum delay before reply (milliseconds)
@@ -29,6 +30,7 @@ func Load() Config {
 	sqlitePath := getenv("SQLITE_PATH", "./data/whatsapp.db")
 	supabaseURL := getenv("SUPABASE_URL", "")
 	supabaseKey := getenv("SUPABASE_KEY", "")
+	geminiAPIKey := getenv("GEMINI_API_KEY", "")
 	groupIDRaw := getenv("GROUP_ID", "")
 	var groupIDs []string
 	if groupIDRaw != "" {
@@ -48,6 +50,7 @@ func Load() Config {
 		SQLitePath:      sqlitePath,
 		SupabaseURL:     supabaseURL,
 		SupabaseKey:     supabaseKey,
+		GeminiAPIKey:    geminiAPIKey,
 		GroupIDs:        groupIDs,
 		BotPhone:        botPhone,
 		ReplyDelayMinMs: replyDelayMinMs,

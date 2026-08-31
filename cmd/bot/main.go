@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/fardannozami/shohibul-quran-bot/internal/app/ai"
 	"github.com/fardannozami/shohibul-quran-bot/internal/app/gamification"
 	"github.com/fardannozami/shohibul-quran-bot/internal/app/kajian"
 	"github.com/fardannozami/shohibul-quran-bot/internal/app/motivation"
@@ -48,6 +49,7 @@ func main() {
 	kajianEngine := kajian.NewEngine()
 	sunnahEngine := sunnah.NewEngine()
 	handleMessageUC := usecase.NewHandleMessageUsecase(repo, parserMod, gameEngine, motEngine)
+	aiEngine := ai.NewEngine(cfg.GeminiAPIKey)
 
 	// 5. WhatsApp Service
 	waService := wa.NewService(cfg.SQLitePath, logger, cfg.SupabaseURL, cfg.SupabaseKey)
@@ -119,6 +121,42 @@ func main() {
 		}
 
 		fmt.Printf("Message from %s (%s): %s\n", pushName, userID, msg)
+
+		// Detect if this message is a reply to the bot itself
+		if isReplyToBot(evt, client) {
+			if cfg.GeminiAPIKey != "" {
+				// Generate AI response
+				response, err := aiEngine.GenerateResponse(ctx, msg)
+				if err != nil {
+					log.Printf("AI response error: %v", err)
+					return
+				}
+
+				if response != "" {
+					// Apply reply delay to appear more human-like
+					applyReplyDelay(cfg, waService, ctx, evt.Info.Chat)
+					resp := &waE2E.Message{
+						Conversation: &response,
+					}
+					_, err := waService.GetClient().SendMessage(ctx, evt.Info.Chat, resp)
+					if err != nil {
+						log.Printf("Failed to send AI response: %v", err)
+					}
+				}
+			} else {
+				// Gemini key not set, reply with default message
+				response := "Maaf, fitur AI sedang tidak aktif. Silakan hubungi admin untuk mengaktifkannya."
+				applyReplyDelay(cfg, waService, ctx, evt.Info.Chat)
+				resp := &waE2E.Message{
+					Conversation: &response,
+				}
+				_, err := waService.GetClient().SendMessage(ctx, evt.Info.Chat, resp)
+				if err != nil {
+					log.Printf("Failed to send default reply: %v", err)
+				}
+			}
+			return
+		}
 
 		// Execute Use Case
 		response, err := handleMessageUC.Execute(ctx, userID, pushName, msg, evt.Info.Chat.String())
@@ -243,4 +281,52 @@ func main() {
 	log.Println("Shutting down...")
 	waService.Disconnect()
 	os.Exit(0)
+}
+
+// isReplyToBot returns true if the incoming message is a reply (quote) directed at the bot itself.
+func isReplyToBot(evt *events.Message, client *whatsmeow.Client) bool {
+	if evt.Message.ExtendedTextMessage == nil {
+		return false
+	}
+	ctxInfo := evt.Message.ExtendedTextMessage.ContextInfo
+	if ctxInfo == nil || ctxInfo.StanzaID == nil {
+		return false
+	}
+
+	botID := ""
+	if client != nil && client.Store != nil && client.Store.ID != nil {
+		botID = client.Store.ID.String()
+	}
+
+	target := ""
+	if ctxInfo.Participant != nil {
+		target = *ctxInfo.Participant
+	}
+
+	if target == "" && ctxInfo.RemoteJID != nil {
+		target = *ctxInfo.RemoteJID
+	}
+
+	return botID != "" && target != "" && botID == target
+}
+
+// applyReplyDelay adds a configurable human-like delay (and optional typing indicator) before replying.
+func applyReplyDelay(cfg config.Config, waService *wa.Service, ctx context.Context, chat types.JID) {
+	delayMs := cfg.ReplyDelayMinMs
+	if cfg.ReplyDelayMaxMs > cfg.ReplyDelayMinMs {
+		delayMs = cfg.ReplyDelayMinMs + rand.Intn(cfg.ReplyDelayMaxMs-cfg.ReplyDelayMinMs+1)
+	}
+
+	if delayMs > 0 {
+		if cfg.ShowTyping {
+			_ = waService.GetClient().SendChatPresence(ctx, chat, types.ChatPresenceComposing, types.ChatPresenceMediaText)
+		}
+
+		log.Printf("Delaying reply by %dms", delayMs)
+		time.Sleep(time.Duration(delayMs) * time.Millisecond)
+
+		if cfg.ShowTyping {
+			_ = waService.GetClient().SendChatPresence(ctx, chat, types.ChatPresencePaused, types.ChatPresenceMediaText)
+		}
+	}
 }
