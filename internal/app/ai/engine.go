@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-const geminiEndpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+const geminiEndpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
 
 const systemPrompt = `Kamu adalah "Shohibul Qur'an Bot", asisten WhatsApp komunitas islami yang ramah dan santun dalam bahasa Indonesia.
 
