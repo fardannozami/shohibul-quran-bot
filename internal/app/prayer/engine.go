@@ -33,17 +33,6 @@ func NewEngine() *Engine {
 				},
 			},
 			{
-				Name:    "Shalat Awwabin",
-				Time:    "18:15",
-				Message: "Selamat menjalankan ibadah, kaum Muslimin! 🌅\nSaatnya menunaikan Shalat Awwabin (6 rakaat setelah Maghrib).",
-				Keutamaan: []string{
-					"Shalat 6 rakaat setelah Maghrib dapat menghapus dosa-dosa sebagaimana menghapus rumput di musim panas. (HR. Tirmidzi)",
-					"Shalat Awwabin adalah shalat yang paling dicintai Allah SWT setelah shalat wajib. (HR. Tirmidzi)",
-					"Allah SWT akan memudahkan hisab (perhitungan) bagi yang mengerjakannya. (HR. Tirmidzi)",
-					"Shalat Awwabin dapat menghapus dosa-dosa yang dilakukan di antara Maghrib dan Isya. (HR. Tirmidzi)",
-				},
-			},
-			{
 				Name:    "Shalat Tahajjud",
 				Time:    "03:00",
 				Message: "Selamat malam, kaum Muslimin! 🌙\nSaatnya menunaikan Shalat Tahajjud (shalat malam).",
