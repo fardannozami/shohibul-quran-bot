@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -293,9 +294,9 @@ func isReplyToBot(evt *events.Message, client *whatsmeow.Client) bool {
 		return false
 	}
 
-	botID := ""
+	botUser := ""
 	if client != nil && client.Store != nil && client.Store.ID != nil {
-		botID = client.Store.ID.String()
+		botUser = client.Store.ID.User
 	}
 
 	target := ""
@@ -307,7 +308,16 @@ func isReplyToBot(evt *events.Message, client *whatsmeow.Client) bool {
 		target = *ctxInfo.RemoteJID
 	}
 
-	return botID != "" && target != "" && botID == target
+	if botUser == "" || target == "" {
+		return false
+	}
+
+	// Extract user part from target if it contains @ (e.g. "1234567890@s.whatsapp.net" -> "1234567890")
+	if idx := strings.Index(target, "@"); idx > 0 {
+		target = target[:idx]
+	}
+
+	return botUser == target
 }
 
 // applyReplyDelay adds a configurable human-like delay (and optional typing indicator) before replying.
