@@ -41,45 +41,64 @@ func (e *Engine) GenerateResponse(ctx context.Context, userMessage string) (stri
 	if e.apiKey == "" {
 		return "", fmt.Errorf("gemini api key is empty")
 	}
-
 	url := geminiEndpoint + "?key=" + e.apiKey
-
 	payload := map[string]interface{}{
 		"systemInstruction": map[string]interface{}{
 			"parts": []map[string]string{{"text": systemPrompt}},
 		},
 		"contents": []map[string]interface{}{
-			{
-				"parts": []map[string]string{{"text": userMessage}},
-			},
+			{"parts": []map[string]string{{"text": userMessage}}},
 		},
 		"generationConfig": map[string]interface{}{
 			"temperature":     0.7,
 			"maxOutputTokens": 800,
 		},
 	}
-
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return "", err
 	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
-	if err != nil {
-		return "", err
+	var respBody []byte
+	var status int
+	for attempt := 0; attempt < 3; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+		if err != nil {
+			return "", err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := e.client.Do(req)
+		if err != nil {
+			if attempt == 2 {
+				return "", err
+			}
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(time.Duration(attempt+1) * time.Second):
+			}
+			continue
+		}
+		respBody, _ = io.ReadAll(resp.Body)
+		resp.Body.Close()
+		status = resp.StatusCode
+		if status == http.StatusOK {
+			break
+		}
+		if status == 429 || status == 503 || status >= 500 {
+			if attempt == 2 {
+				return "", fmt.Errorf("gemini API error: %d %s", status, strings.TrimSpace(string(respBody)))
+			}
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(time.Duration(attempt+1)*2 * time.Second):
+			}
+			continue
+		}
+		return "", fmt.Errorf("gemini API error: %d %s", status, strings.TrimSpace(string(respBody)))
 	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := e.client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	respBody, _ := io.ReadAll(resp.Body)
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("gemini API error: %d %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+	if status != http.StatusOK {
+		return "", fmt.Errorf("gemini API error: %d %s", status, strings.TrimSpace(string(respBody)))
 	}
 
 	var result struct {
