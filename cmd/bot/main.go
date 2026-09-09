@@ -123,37 +123,26 @@ func main() {
 
 		fmt.Printf("Message from %s (%s): %s\n", pushName, userID, msg)
 
-		// Detect if this message is a reply to the bot itself
 		if isReplyToBot(evt, client) {
+			var response string
 			if cfg.GeminiAPIKey != "" {
-				// Generate AI response
-				response, err := aiEngine.GenerateResponse(ctx, msg)
+				r, err := aiEngine.GenerateResponse(ctx, msg)
 				if err != nil {
 					log.Printf("AI response error: %v", err)
-					return
-				}
-
-				if response != "" {
-					// Apply reply delay to appear more human-like
-					applyReplyDelay(cfg, waService, ctx, evt.Info.Chat)
-					resp := &waE2E.Message{
-						Conversation: &response,
-					}
-					_, err := waService.GetClient().SendMessage(ctx, evt.Info.Chat, resp)
-					if err != nil {
-						log.Printf("Failed to send AI response: %v", err)
-					}
+					response = "Maaf, terjadi kendala saat menghubungi AI. Coba lagi beberapa saat ya 🙏"
+				} else if r != "" {
+					response = r
+				} else {
+					response = "Maaf, AI belum bisa menjawab saat ini. Coba lagi ya 🙏"
 				}
 			} else {
-				// Gemini key not set, reply with default message
-				response := "Maaf, fitur AI sedang tidak aktif. Silakan hubungi admin untuk mengaktifkannya."
+				response = "Maaf, fitur AI sedang tidak aktif. Silakan hubungi admin untuk mengaktifkannya."
+			}
+			if response != "" {
 				applyReplyDelay(cfg, waService, ctx, evt.Info.Chat)
-				resp := &waE2E.Message{
-					Conversation: &response,
-				}
-				_, err := waService.GetClient().SendMessage(ctx, evt.Info.Chat, resp)
-				if err != nil {
-					log.Printf("Failed to send default reply: %v", err)
+				resp := &waE2E.Message{Conversation: &response}
+				if _, err := waService.GetClient().SendMessage(ctx, evt.Info.Chat, resp); err != nil {
+					log.Printf("Failed to send AI response: %v", err)
 				}
 			}
 			return
@@ -284,40 +273,85 @@ func main() {
 	os.Exit(0)
 }
 
-// isReplyToBot returns true if the incoming message is a reply (quote) directed at the bot itself.
+func getContextInfo(msg *waE2E.Message) *waE2E.ContextInfo {
+	if msg == nil {
+		return nil
+	}
+	if m := msg.ExtendedTextMessage; m != nil && m.ContextInfo != nil {
+		return m.ContextInfo
+	}
+	if m := msg.ImageMessage; m != nil && m.ContextInfo != nil {
+		return m.ContextInfo
+	}
+	if m := msg.VideoMessage; m != nil && m.ContextInfo != nil {
+		return m.ContextInfo
+	}
+	if m := msg.DocumentMessage; m != nil && m.ContextInfo != nil {
+		return m.ContextInfo
+	}
+	if m := msg.AudioMessage; m != nil && m.ContextInfo != nil {
+		return m.ContextInfo
+	}
+	if m := msg.StickerMessage; m != nil && m.ContextInfo != nil {
+		return m.ContextInfo
+	}
+	if m := msg.ContactMessage; m != nil && m.ContextInfo != nil {
+		return m.ContextInfo
+	}
+	if m := msg.LocationMessage; m != nil && m.ContextInfo != nil {
+		return m.ContextInfo
+	}
+	if m := msg.ButtonsMessage; m != nil && m.ContextInfo != nil {
+		return m.ContextInfo
+	}
+	if m := msg.ListMessage; m != nil && m.ContextInfo != nil {
+		return m.ContextInfo
+	}
+	return nil
+}
+
 func isReplyToBot(evt *events.Message, client *whatsmeow.Client) bool {
-	if evt.Message.ExtendedTextMessage == nil {
+	ctxInfo := getContextInfo(evt.Message)
+	if ctxInfo == nil || ctxInfo.StanzaID == nil || *ctxInfo.StanzaID == "" {
 		return false
 	}
-	ctxInfo := evt.Message.ExtendedTextMessage.ContextInfo
-	if ctxInfo == nil || ctxInfo.StanzaID == nil {
+	if ctxInfo.Participant == nil || *ctxInfo.Participant == "" {
 		return false
 	}
-
-	botUser := ""
-	if client != nil && client.Store != nil && client.Store.ID != nil {
-		botUser = client.Store.ID.User
-	}
-
-	target := ""
-	if ctxInfo.Participant != nil {
-		target = *ctxInfo.Participant
-	}
-
-	if target == "" && ctxInfo.RemoteJID != nil {
-		target = *ctxInfo.RemoteJID
-	}
-
-	if botUser == "" || target == "" {
+	if client == nil || client.Store == nil {
 		return false
 	}
-
-	// Extract user part from target if it contains @ (e.g. "1234567890@s.whatsapp.net" -> "1234567890")
-	if idx := strings.Index(target, "@"); idx > 0 {
-		target = target[:idx]
+	targetStr := *ctxInfo.Participant
+	targetUser := targetStr
+	if idx := strings.Index(targetUser, "@"); idx > 0 {
+		targetUser = targetUser[:idx]
 	}
-
-	return botUser == target
+	botUsers := map[string]struct{}{}
+	if client.Store.ID != nil && client.Store.ID.User != "" {
+		botUsers[client.Store.ID.User] = struct{}{}
+	}
+	if lid := client.Store.GetLID(); lid.User != "" {
+		botUsers[lid.User] = struct{}{}
+	}
+	if _, ok := botUsers[targetUser]; ok {
+		return true
+	}
+	if parsed, err := types.ParseJID(targetStr); err == nil {
+		if parsed.Server == types.HiddenUserServer {
+			if pn, err := client.Store.LIDs.GetPNForLID(context.Background(), parsed); err == nil && pn.User != "" {
+				if _, ok := botUsers[pn.User]; ok {
+					return true
+				}
+			}
+		} else if parsed.Server == types.DefaultUserServer {
+			if lidJID, err := client.Store.LIDs.GetLIDForPN(context.Background(), parsed); err == nil && lidJID.User != "" {
+				if _, ok := botUsers[lidJID.User]; ok {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 // applyReplyDelay adds a configurable human-like delay (and optional typing indicator) before replying.
