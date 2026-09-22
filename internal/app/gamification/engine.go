@@ -9,12 +9,23 @@ import (
 	"github.com/fardannozami/shohibul-quran-bot/internal/parser"
 )
 
+// TafsirSummarizer produces a short tafsir summary for a surah:ayah.
+type TafsirSummarizer interface {
+	Summarize(ctx context.Context, surahNum, ayahNum int) (string, error)
+}
+
 type Engine struct {
-	repo domain.BotRepository
+	repo   domain.BotRepository
+	tafsir TafsirSummarizer
 }
 
 func NewEngine(repo domain.BotRepository) *Engine {
 	return &Engine{repo: repo}
+}
+
+// SetTafsir attaches a tafsir summarizer used to enrich surah-based reports.
+func (e *Engine) SetTafsir(t TafsirSummarizer) {
+	e.tafsir = t
 }
 
 // ProcessReports computes XP, streaks, and badges for potentially multiple incoming reports in one message.
@@ -156,6 +167,7 @@ func (e *Engine) ProcessReports(ctx context.Context, userID, name string, result
 			resp += fmt.Sprintf("- %d hlm\n", r.Pages)
 		}
 	}
+	resp = e.appendTafsirSummary(ctx, resp, results)
 	if todayProgress.DurationMinutes > 0 {
 		resp += fmt.Sprintf("Total hari ini: *%d hlm* (⏱️ %d menit)\n", todayProgress.Pages, todayProgress.DurationMinutes)
 	} else {
@@ -238,6 +250,30 @@ func (e *Engine) checkBadges(ctx context.Context, user *domain.User, todayProgre
 		msg += "\n\nSemoga menjadi amal jariyah dan syafaat di hari akhir 🤲"
 	}
 	return msg
+}
+
+// appendTafsirSummary enriches the response with a short tafsir summary of the
+// first surah-based reading in the report (if a summarizer is available).
+func (e *Engine) appendTafsirSummary(ctx context.Context, resp string, results []parser.ParseResult) string {
+	if e.tafsir == nil {
+		return resp
+	}
+	for _, r := range results {
+		if r.ReportType != "surah" || r.SurahName == "" || r.StartAyah <= 0 {
+			continue
+		}
+		surahNum := parser.FindSurahNumber(r.SurahName)
+		if surahNum <= 0 {
+			continue
+		}
+		summary, err := e.tafsir.Summarize(ctx, surahNum, r.StartAyah)
+		if err != nil || summary == "" {
+			continue
+		}
+		resp += fmt.Sprintf("\n📜 *Ringkasan Tafsir* (QS. %s:%d)\n%s\n", r.SurahName, r.StartAyah, summary)
+		return resp
+	}
+	return resp
 }
 
 func (e *Engine) generateProgressBar(current, target int) string {

@@ -17,6 +17,7 @@ import (
 	"github.com/fardannozami/shohibul-quran-bot/internal/app/motivation"
 	"github.com/fardannozami/shohibul-quran-bot/internal/app/prayer"
 	"github.com/fardannozami/shohibul-quran-bot/internal/app/sunnah"
+	"github.com/fardannozami/shohibul-quran-bot/internal/app/tafsir"
 	"github.com/fardannozami/shohibul-quran-bot/internal/app/usecase"
 	"github.com/fardannozami/shohibul-quran-bot/internal/bot"
 	"github.com/fardannozami/shohibul-quran-bot/internal/config"
@@ -45,6 +46,7 @@ func main() {
 	// 4. Use Cases
 	parserMod := parser.NewReportParser()
 	gameEngine := gamification.NewEngine(repo)
+	gameEngine.SetTafsir(tafsir.NewEngine())
 	motEngine := motivation.NewEngine()
 	prayerEngine := prayer.NewEngine()
 	kajianEngine := kajian.NewEngine()
