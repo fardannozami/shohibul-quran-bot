@@ -47,21 +47,33 @@ func NewEngine(apiKey string) *Engine {
 }
 
 func (e *Engine) GenerateResponse(ctx context.Context, userMessage string) (string, error) {
-	return e.generate(ctx, systemPrompt, userMessage, 0.7, 800)
+	return e.generate(ctx, systemPrompt, userMessage, 0.7, 800, -1)
 }
 
 // GenerateTafsirSummary asks the model to produce a concise Indonesian summary
-// of the given tafsir text (Kemenag via equran.id).
+// of the given tafsir text (Kemenag via equran.id). Thinking is disabled so
+// the output never gets cut off by the internal thinking budget.
 func (e *Engine) GenerateTafsirSummary(ctx context.Context, surahName, ayahLabel, teks string) (string, error) {
 	prompt := fmt.Sprintf("Ringkas tafsir QS. %s:%s berikut dalam 3-5 kalimat yang enak dibaca:\n\n%s", surahName, ayahLabel, teks)
-	return e.generate(ctx, tafsirSystemPrompt, prompt, 0.3, 500)
+	return e.generate(ctx, tafsirSystemPrompt, prompt, 0.3, 1000, 0)
 }
 
-func (e *Engine) generate(ctx context.Context, system, user string, temperature float64, maxTokens int) (string, error) {
+func (e *Engine) generate(ctx context.Context, system, user string, temperature float64, maxTokens, thinkingTokens int) (string, error) {
 	if e.apiKey == "" {
 		return "", fmt.Errorf("gemini api key is empty")
 	}
 	url := geminiEndpoint + "?key=" + e.apiKey
+
+	genConfig := map[string]interface{}{
+		"temperature":     temperature,
+		"maxOutputTokens": maxTokens,
+	}
+	if thinkingTokens >= 0 {
+		genConfig["thinkingConfig"] = map[string]interface{}{
+			"thinkingBudget": thinkingTokens,
+		}
+	}
+
 	payload := map[string]interface{}{
 		"systemInstruction": map[string]interface{}{
 			"parts": []map[string]string{{"text": system}},
@@ -69,10 +81,7 @@ func (e *Engine) generate(ctx context.Context, system, user string, temperature 
 		"contents": []map[string]interface{}{
 			{"parts": []map[string]string{{"text": user}}},
 		},
-		"generationConfig": map[string]interface{}{
-			"temperature":     temperature,
-			"maxOutputTokens": maxTokens,
-		},
+		"generationConfig": genConfig,
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
