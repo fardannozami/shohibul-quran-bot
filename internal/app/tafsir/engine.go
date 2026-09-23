@@ -13,7 +13,7 @@ import (
 )
 
 // maxSummaryRunes is the maximum length of the summarized tafsir text.
-const maxSummaryRunes = 300
+const maxSummaryRunes = 800
 
 // AyahTafsir holds the tafsir text for a single verse.
 type AyahTafsir struct {
@@ -113,7 +113,8 @@ func (e *Engine) fetchSurahTafsir(ctx context.Context, surahNum int) ([]AyahTafs
 
 var htmlTagRegex = regexp.MustCompile("<[^>]*>")
 
-// summarize turns the full tafsir text into a short 1-2 sentence summary.
+// summarize turns the full tafsir text into a short summary (up to a few
+// sentences so the report reply stays readable).
 func summarize(teks string) string {
 	clean := htmlTagRegex.ReplaceAllString(teks, "")
 	clean = strings.Join(strings.Fields(clean), " ")
@@ -122,8 +123,8 @@ func summarize(teks string) string {
 	}
 
 	sentences := splitSentences(clean)
-	if len(sentences) > 2 {
-		sentences = sentences[:2]
+	if len(sentences) > 4 {
+		sentences = sentences[:4]
 	}
 
 	summary := strings.Join(sentences, " ")
