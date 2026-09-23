@@ -45,14 +45,16 @@ func main() {
 
 	// 4. Use Cases
 	parserMod := parser.NewReportParser()
+	aiEngine := ai.NewEngine(cfg.GeminiAPIKey)
+	tafsirEngine := tafsir.NewEngine()
+	tafsirEngine.SetAI(aiEngine)
 	gameEngine := gamification.NewEngine(repo)
-	gameEngine.SetTafsir(tafsir.NewEngine())
+	gameEngine.SetTafsir(tafsirEngine)
 	motEngine := motivation.NewEngine()
 	prayerEngine := prayer.NewEngine()
 	kajianEngine := kajian.NewEngine()
 	sunnahEngine := sunnah.NewEngine()
 	handleMessageUC := usecase.NewHandleMessageUsecase(repo, parserMod, gameEngine, motEngine)
-	aiEngine := ai.NewEngine(cfg.GeminiAPIKey)
 
 	// 5. WhatsApp Service
 	waService := wa.NewService(cfg.SQLitePath, logger, cfg.SupabaseURL, cfg.SupabaseKey)

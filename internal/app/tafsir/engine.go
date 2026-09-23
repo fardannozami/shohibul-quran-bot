@@ -10,10 +10,18 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/fardannozami/shohibul-quran-bot/internal/parser"
 )
 
-// maxSummaryRunes is the maximum length of the summarized tafsir text.
+// maxSummaryRunes is the maximum length of the summarized tafsir text
+// produced by the non-AI fallback.
 const maxSummaryRunes = 800
+
+// aiSummarizer produces a natural-language Indonesian summary of tafsir text.
+type aiSummarizer interface {
+	GenerateTafsirSummary(ctx context.Context, surahName, ayahLabel, teks string) (string, error)
+}
 
 // AyahTafsir holds the tafsir text for a single verse.
 type AyahTafsir struct {
@@ -22,11 +30,13 @@ type AyahTafsir struct {
 }
 
 // Engine fetches and caches tafsir (Tafsir Kemenag via equran.id)
-// and produces short summaries that can be shown in report replies.
+// and produces summaries that can be shown in report replies. When an AI
+// summarizer is attached, it is used to generate a natural summary.
 type Engine struct {
 	client *http.Client
 	mu     sync.Mutex
 	cache  map[int][]AyahTafsir
+	ai     aiSummarizer
 }
 
 func NewEngine() *Engine {
@@ -36,6 +46,11 @@ func NewEngine() *Engine {
 		},
 		cache: make(map[int][]AyahTafsir),
 	}
+}
+
+// SetAI attaches an AI summarizer used to generate tafsir summaries.
+func (e *Engine) SetAI(a aiSummarizer) {
+	e.ai = a
 }
 
 // Summarize returns a short Indonesian summary of the tafsir for a given
@@ -58,7 +73,9 @@ func (e *Engine) Summarize(ctx context.Context, surahNum, ayahNum int) (string, 
 		return "", fmt.Errorf("tafsir for verse %d:%d not found", surahNum, ayahNum)
 	}
 
-	return summarize(entry.Teks), nil
+	clean := htmlTagRegex.ReplaceAllString(entry.Teks, "")
+	clean = strings.Join(strings.Fields(clean), " ")
+	return e.aiOrFallback(ctx, surahNum, ayahNum, ayahNum, clean, summarize(entry.Teks)), nil
 }
 
 // SummarizeRange returns a short Indonesian summary covering the tafsir of an
@@ -77,11 +94,52 @@ func (e *Engine) SummarizeRange(ctx context.Context, surahNum, startAyah, endAya
 		return "", err
 	}
 
-	var sentences []string
+	var inRange []AyahTafsir
 	for _, a := range ayats {
-		if a.Ayah < startAyah || a.Ayah > endAyah {
+		if a.Ayah >= startAyah && a.Ayah <= endAyah {
+			inRange = append(inRange, a)
+		}
+	}
+	if len(inRange) == 0 {
+		return "", fmt.Errorf("tafsir for range %d:%d-%d not found", surahNum, startAyah, endAyah)
+	}
+
+	combined := ""
+	for _, a := range inRange {
+		clean := htmlTagRegex.ReplaceAllString(a.Teks, "")
+		clean = strings.Join(strings.Fields(clean), " ")
+		if clean == "" {
 			continue
 		}
+		combined += fmt.Sprintf("QS. %s:%d: %s\n", parser.GetSurahName(surahNum), a.Ayah, clean)
+	}
+
+	fallback := summarizeRangeFallback(inRange, startAyah)
+	return e.aiOrFallback(ctx, surahNum, startAyah, endAyah, combined, fallback), nil
+}
+
+// aiOrFallback routes to the AI summarizer when available, and falls back to
+// the heuristic summary otherwise.
+func (e *Engine) aiOrFallback(ctx context.Context, surahNum, startAyah, endAyah int, aiText, fallback string) string {
+	if e.ai == nil {
+		return fallback
+	}
+	label := fmt.Sprintf("%d", startAyah)
+	if endAyah > startAyah {
+		label = fmt.Sprintf("%d-%d", startAyah, endAyah)
+	}
+	if s, err := e.ai.GenerateTafsirSummary(ctx, parser.GetSurahName(surahNum), label, aiText); err == nil && s != "" {
+		return s
+	}
+	return fallback
+}
+
+// summarizeRangeFallback builds a heuristic summary spanning the ayah range by
+// taking the first two sentences of the first verse and the first meaningful
+// sentence of each subsequent verse.
+func summarizeRangeFallback(inRange []AyahTafsir, startAyah int) string {
+	var sentences []string
+	for _, a := range inRange {
 		clean := htmlTagRegex.ReplaceAllString(a.Teks, "")
 		clean = strings.Join(strings.Fields(clean), " ")
 		if clean == "" {
@@ -110,10 +168,9 @@ func (e *Engine) SummarizeRange(ctx context.Context, surahNum, startAyah, endAya
 	}
 
 	if len(sentences) == 0 {
-		return "", fmt.Errorf("tafsir for range %d:%d-%d not found", surahNum, startAyah, endAyah)
+		return ""
 	}
-
-	return truncateAtWordBoundary(strings.Join(sentences, " "), maxSummaryRunes), nil
+	return truncateAtWordBoundary(strings.Join(sentences, " "), maxSummaryRunes)
 }
 
 // fetchSurahTafsir fetches and caches the full tafsir of a surah.

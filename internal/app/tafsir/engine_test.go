@@ -77,3 +77,76 @@ func TestSummarizeRangeFetched(t *testing.T) {
 		t.Errorf("single-ayah range mismatch:\n got  %q\n want %q", one, single)
 	}
 }
+
+type fakeAI struct {
+	summary string
+	err     error
+	gotName string
+	gotLabel string
+	gotText  string
+}
+
+func (f *fakeAI) GenerateTafsirSummary(_ context.Context, surahName, ayahLabel, teks string) (string, error) {
+	f.gotName = surahName
+	f.gotLabel = ayahLabel
+	f.gotText = teks
+	return f.summary, f.err
+}
+
+func TestSummarizeUsesAI(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("single ayah", func(t *testing.T) {
+		fake := &fakeAI{summary: "Ringkasan AI ayat 1."}
+		e := NewEngine()
+		e.SetAI(fake)
+
+		got, err := e.Summarize(ctx, 32, 1)
+		if err != nil {
+			t.Fatalf("Summarize error: %v", err)
+		}
+		if got != "Ringkasan AI ayat 1." {
+			t.Errorf("expected AI summary, got %q", got)
+		}
+		if fake.gotLabel != "1" {
+			t.Errorf("expected label 1, got %q", fake.gotLabel)
+		}
+		if !strings.Contains(fake.gotText, "Alif Lam Mim") {
+			t.Errorf("expected tafsir text sent to AI, got %q", fake.gotText)
+		}
+	})
+
+	t.Run("range uses AI when available", func(t *testing.T) {
+		fake := &fakeAI{summary: "Ringkasan AI 1-30."}
+		e := NewEngine()
+		e.SetAI(fake)
+
+		got, err := e.SummarizeRange(ctx, 32, 1, 30)
+		if err != nil {
+			t.Fatalf("SummarizeRange error: %v", err)
+		}
+		if got != "Ringkasan AI 1-30." {
+			t.Errorf("expected AI range summary, got %q", got)
+		}
+		if fake.gotLabel != "1-30" {
+			t.Errorf("expected label 1-30, got %q", fake.gotLabel)
+		}
+		if fake.gotName != "As-Sajdah" {
+			t.Errorf("expected surah name As-Sajdah, got %q", fake.gotName)
+		}
+	})
+
+	t.Run("falls back when AI errors", func(t *testing.T) {
+		fake := &fakeAI{err: context.DeadlineExceeded}
+		e := NewEngine()
+		e.SetAI(fake)
+
+		got, err := e.Summarize(ctx, 32, 1)
+		if err != nil {
+			t.Fatalf("Summarize error: %v", err)
+		}
+		if got == "" {
+			t.Fatal("expected heuristic fallback, got empty")
+		}
+	})
+}

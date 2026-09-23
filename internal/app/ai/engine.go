@@ -23,6 +23,15 @@ Tugas & aturan:
 - Selalu sampaikan dalil (QS./HR.) jika menyebutkan sumber, tetapi jangan mengarang hadits. Jika tidak yakin, katakan agar memverifikasi.
 - Gunakan emoji secukupnya agar terasa hangat, bukan berlebihan.`
 
+const tafsirSystemPrompt = `Kamu adalah penulis ringkasan tafsir Al-Qur'an dalam bahasa Indonesia yang akurat dan mudah dipahami.
+
+Tugas & aturan:
+- Buat ringkasan dari teks tafsir Kemenag yang diberikan, berdasarkan isi teks tersebut saja, jangan menambah informasi dari luar.
+- Tulis 3-5 kalimat paragraf yang mengalir; jangan pakai daftar atau bullet.
+- Ungkapkan intisarinya dengan bahasa yang enak dibaca, bukan menempel teks asli mentah-mentah.
+- Hindari pengulangan pembuka seperti "Ayat ini menerangkan bahwa..." di awal setiap kalimat.
+- Jangan gunakan emoji atau format markdown.`
+
 type Engine struct {
 	apiKey string
 	client *http.Client
@@ -38,20 +47,31 @@ func NewEngine(apiKey string) *Engine {
 }
 
 func (e *Engine) GenerateResponse(ctx context.Context, userMessage string) (string, error) {
+	return e.generate(ctx, systemPrompt, userMessage, 0.7, 800)
+}
+
+// GenerateTafsirSummary asks the model to produce a concise Indonesian summary
+// of the given tafsir text (Kemenag via equran.id).
+func (e *Engine) GenerateTafsirSummary(ctx context.Context, surahName, ayahLabel, teks string) (string, error) {
+	prompt := fmt.Sprintf("Ringkas tafsir QS. %s:%s berikut dalam 3-5 kalimat yang enak dibaca:\n\n%s", surahName, ayahLabel, teks)
+	return e.generate(ctx, tafsirSystemPrompt, prompt, 0.3, 500)
+}
+
+func (e *Engine) generate(ctx context.Context, system, user string, temperature float64, maxTokens int) (string, error) {
 	if e.apiKey == "" {
 		return "", fmt.Errorf("gemini api key is empty")
 	}
 	url := geminiEndpoint + "?key=" + e.apiKey
 	payload := map[string]interface{}{
 		"systemInstruction": map[string]interface{}{
-			"parts": []map[string]string{{"text": systemPrompt}},
+			"parts": []map[string]string{{"text": system}},
 		},
 		"contents": []map[string]interface{}{
-			{"parts": []map[string]string{{"text": userMessage}}},
+			{"parts": []map[string]string{{"text": user}}},
 		},
 		"generationConfig": map[string]interface{}{
-			"temperature":     0.7,
-			"maxOutputTokens": 800,
+			"temperature":     temperature,
+			"maxOutputTokens": maxTokens,
 		},
 	}
 	body, err := json.Marshal(payload)
