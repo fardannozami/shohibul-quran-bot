@@ -44,3 +44,36 @@ func TestSummarizeTruncates(t *testing.T) {
 		t.Errorf("expected trailing ellipsis, got %q", got)
 	}
 }
+
+func TestSummarizeRangeFetched(t *testing.T) {
+	e := NewEngine()
+	ctx := context.Background()
+
+	// Whole-surah report (As-Sajdah 1-30) should produce a summary spanning
+	// more than just verse 1.
+	single, err := e.Summarize(ctx, 32, 1)
+	if err != nil {
+		t.Fatalf("Summarize(32,1) error: %v", err)
+	}
+	whole, err := e.SummarizeRange(ctx, 32, 1, 30)
+	if err != nil {
+		t.Fatalf("SummarizeRange(32,1,30) error: %v", err)
+	}
+	if whole == "" {
+		t.Fatal("SummarizeRange(32,1,30) returned empty")
+	}
+	t.Logf("single: %s", single)
+	t.Logf("whole: %s", whole)
+	if len([]rune(whole)) < len([]rune(single)) {
+		t.Errorf("range summary %d runes should be at least as long as single %d", len([]rune(whole)), len([]rune(single)))
+	}
+
+	// A single-ayah range should behave like Summarize.
+	one, err := e.SummarizeRange(ctx, 32, 1, 1)
+	if err != nil {
+		t.Fatalf("SummarizeRange(32,1,1) error: %v", err)
+	}
+	if one != single {
+		t.Errorf("single-ayah range mismatch:\n got  %q\n want %q", one, single)
+	}
+}

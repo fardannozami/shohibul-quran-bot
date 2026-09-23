@@ -61,6 +61,61 @@ func (e *Engine) Summarize(ctx context.Context, surahNum, ayahNum int) (string, 
 	return summarize(entry.Teks), nil
 }
 
+// SummarizeRange returns a short Indonesian summary covering the tafsir of an
+// ayah range within a surah (e.g. a whole surah reading). For a single ayah it
+// behaves like Summarize.
+func (e *Engine) SummarizeRange(ctx context.Context, surahNum, startAyah, endAyah int) (string, error) {
+	if endAyah < startAyah {
+		startAyah, endAyah = endAyah, startAyah
+	}
+	if startAyah == endAyah {
+		return e.Summarize(ctx, surahNum, startAyah)
+	}
+
+	ayats, err := e.fetchSurahTafsir(ctx, surahNum)
+	if err != nil {
+		return "", err
+	}
+
+	var sentences []string
+	for _, a := range ayats {
+		if a.Ayah < startAyah || a.Ayah > endAyah {
+			continue
+		}
+		clean := htmlTagRegex.ReplaceAllString(a.Teks, "")
+		clean = strings.Join(strings.Fields(clean), " ")
+		if clean == "" {
+			continue
+		}
+
+		parts := splitSentences(clean)
+		if a.Ayah == startAyah {
+			// Keep a fuller intro for the first verse of the range.
+			if len(parts) > 2 {
+				parts = parts[:2]
+			}
+			sentences = append(sentences, parts...)
+			continue
+		}
+
+		// For the rest, take only the first meaningful sentence, skipping
+		// cross-reference notes like "Lihat Tafsir Alif Lam Mim...".
+		for _, s := range parts {
+			if lihatTafsirRegex.MatchString(s) {
+				continue
+			}
+			sentences = append(sentences, s)
+			break
+		}
+	}
+
+	if len(sentences) == 0 {
+		return "", fmt.Errorf("tafsir for range %d:%d-%d not found", surahNum, startAyah, endAyah)
+	}
+
+	return truncateAtWordBoundary(strings.Join(sentences, " "), maxSummaryRunes), nil
+}
+
 // fetchSurahTafsir fetches and caches the full tafsir of a surah.
 func (e *Engine) fetchSurahTafsir(ctx context.Context, surahNum int) ([]AyahTafsir, error) {
 	e.mu.Lock()
@@ -112,6 +167,8 @@ func (e *Engine) fetchSurahTafsir(ctx context.Context, surahNum int) ([]AyahTafs
 }
 
 var htmlTagRegex = regexp.MustCompile("<[^>]*>")
+
+var lihatTafsirRegex = regexp.MustCompile(`(?i)^lihat\s+tafsir`)
 
 // summarize turns the full tafsir text into a short summary (up to a few
 // sentences so the report reply stays readable).

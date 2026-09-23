@@ -9,9 +9,11 @@ import (
 	"github.com/fardannozami/shohibul-quran-bot/internal/parser"
 )
 
-// TafsirSummarizer produces a short tafsir summary for a surah:ayah.
+// TafsirSummarizer produces a short tafsir summary for a surah:ayah (or a
+// whole ayah range) so report replies can be enriched with reading insight.
 type TafsirSummarizer interface {
 	Summarize(ctx context.Context, surahNum, ayahNum int) (string, error)
+	SummarizeRange(ctx context.Context, surahNum, startAyah, endAyah int) (string, error)
 }
 
 type Engine struct {
@@ -266,11 +268,19 @@ func (e *Engine) appendTafsirSummary(ctx context.Context, resp string, results [
 		if surahNum <= 0 {
 			continue
 		}
-		summary, err := e.tafsir.Summarize(ctx, surahNum, r.StartAyah)
+		var summary string
+		var err error
+		ayahLabel := fmt.Sprintf("%d", r.StartAyah)
+		if r.EndAyah > r.StartAyah {
+			summary, err = e.tafsir.SummarizeRange(ctx, surahNum, r.StartAyah, r.EndAyah)
+			ayahLabel = fmt.Sprintf("%d-%d", r.StartAyah, r.EndAyah)
+		} else {
+			summary, err = e.tafsir.Summarize(ctx, surahNum, r.StartAyah)
+		}
 		if err != nil || summary == "" {
 			continue
 		}
-		resp += fmt.Sprintf("\n📜 *Ringkasan Tafsir* (QS. %s:%d)\n%s\n", r.SurahName, r.StartAyah, summary)
+		resp += fmt.Sprintf("\n📜 *Ringkasan Tafsir* (QS. %s:%s)\n%s\n", r.SurahName, ayahLabel, summary)
 		return resp
 	}
 	return resp
