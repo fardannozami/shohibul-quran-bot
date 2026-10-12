@@ -16,8 +16,11 @@ RUN go mod download
 COPY . .
 
 # Build the application
-# modernc.org/sqlite is pure Go, so CGO_ENABLED=0 is safe and preferred for alpine
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main ./cmd/bot
+# modernc.org/sqlite is pure Go, so CGO_ENABLED=0 is safe and preferred for alpine.
+# NOTE: no -a flag on purpose. It force-rebuilds the entire stdlib on every build,
+# tripling build time and tripling the Go build cache/disk writes (a common cause of
+# ENOSPC failures). -installsuffix cgo is a no-op when CGO_ENABLED=0.
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o main ./cmd/bot
 
 # Run Stage
 FROM alpine:latest

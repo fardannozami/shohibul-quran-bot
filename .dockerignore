@@ -1,0 +1,30 @@
+# WhatsApp auth/session database — must NEVER enter the build context.
+# data/.gitignore keeps it out of git, but `COPY . .` would still bake the
+# device identity keys into a builder layer and the build cache.
+data/
+
+# Local env / secrets
+.env
+.env.*
+*.env
+
+# Build artifacts
+main
+bot.exe
+main.exe
+lapor-bot
+lapor-bot.log
+tmp/
+
+# VCS
+.git
+.gitignore
+
+# Stray debug output committed at repo root
+*.txt
+out.json
+
+# Docker files (not needed inside the build context)
+Dockerfile
+.dockerignore
+docker-compose.yml
