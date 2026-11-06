@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/fardannozami/shohibul-quran-bot/internal/app/kajian"
@@ -51,6 +53,7 @@ func (s *CronService) Start(ctx context.Context) {
 	go s.runKajianJob(ctx)
 	go s.runSleepSunnahJob(ctx)
 	go s.runMalamJumatJob(ctx)
+	go s.runRamadhanCountdownJob(ctx)
 }
 
 func (s *CronService) runReminderJob(ctx context.Context) {
@@ -377,6 +380,67 @@ func (s *CronService) sendMessage(ctx context.Context, text string, mentions []s
 		if err != nil {
 			log.Printf("Failed to send scheduled message to %s: %v", gid, err)
 		}
+	}
+}
+
+func (s *CronService) runRamadhanCountdownJob(ctx context.Context) {
+	for {
+		now := time.Now()
+		target := time.Date(now.Year(), now.Month(), now.Day(), 8, 0, 0, 0, now.Location())
+		if now.After(target) {
+			target = target.AddDate(0, 0, 1)
+		}
+
+		duration := target.Sub(now)
+		log.Printf("Next Ramadhan countdown notification at %v", target)
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(duration):
+			s.executeRamadhanCountdown(ctx)
+		}
+	}
+}
+
+func (s *CronService) ramadhanStartDate() time.Time {
+	if v := strings.TrimSpace(os.Getenv("RAMADHAN_DATE")); v != "" {
+		if t, err := time.Parse("2006-01-02", v); err == nil {
+			return t
+		}
+		log.Printf("Invalid RAMADHAN_DATE %q, using default", v)
+	}
+	// Default: 1 Ramadan 1448 H ≈ 8 Februari 2027
+	return time.Date(2027, 2, 8, 0, 0, 0, 0, time.Local)
+}
+
+func (s *CronService) executeRamadhanCountdown(ctx context.Context) {
+	log.Println("Executing Ramadhan countdown notification...")
+
+	ramadhan := s.ramadhanStartDate()
+	now := time.Now().Truncate(24 * time.Hour)
+	ramadhanDay := ramadhan.Truncate(24 * time.Hour)
+	days := int(ramadhanDay.Sub(now).Hours() / 24)
+
+	var msg string
+	if days > 1 {
+		msg = fmt.Sprintf("🌙 *Countdown Ramadhan* 🌙\n\nInsya Allah, Ramadhan tinggal *%d hari lagi*.\n\nSemangat beribadah! Persiapkan diri dengan memperbanyak amal shaleh, membaca Al-Qur'an, dan memohon ampunan kepada Allah. 🤲", days)
+	} else if days == 1 {
+		msg = "🌙 *Countdown Ramadhan* 🌙\n\nInsya Allah, *besok* adalah hari pertama Ramadhan.\n\nSemangat beribadah! Persiapkan diri dengan memperbanyak amal shaleh, membaca Al-Qur'an, dan memohon ampunan kepada Allah. 🤲"
+	} else if days == 0 {
+		msg = "🌙 *Ramadhan Mubarak* 🌙\n\nHari ini adalah hari pertama Ramadhan.\n\nSemangat beribadah puasa Ramadhan! Semoga kita semua dilancarkan dan diterima ibadahnya. 🤲"
+	} else {
+		dayOfRamadhan := -days + 1
+		if dayOfRamadhan <= 30 {
+			msg = fmt.Sprintf("🌙 *Ramadhan Hari ke-%d* 🌙\n\nSemangat beribadah puasa Ramadhan! Semoga kita semua istiqamah dalam ibadah. 🤲", dayOfRamadhan)
+		} else {
+			// Ramadhan sudah selesai, jangan kirim
+			return
+		}
+	}
+
+	for _, gid := range s.groupIDs {
+		s.sendToGroup(ctx, gid, msg, nil)
 	}
 }
 
