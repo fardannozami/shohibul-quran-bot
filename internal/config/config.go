@@ -15,6 +15,7 @@ type Config struct {
 	SupabaseURL     string
 	SupabaseKey     string
 	GeminiAPIKey    string
+	GeminiModel     string
 	GroupIDs        []string
 	BotPhone        string
 	ReplyDelayMinMs int  // Minimum delay before reply (milliseconds)
@@ -31,6 +32,7 @@ func Load() Config {
 	supabaseURL := getenv("SUPABASE_URL", "")
 	supabaseKey := getenv("SUPABASE_KEY", "")
 	geminiAPIKey := getenv("GEMINI_API_KEY", "")
+	geminiModel := getenv("GEMINI_MODEL", "gemini-3.8-flash")
 	groupIDRaw := getenv("GROUP_ID", "")
 	var groupIDs []string
 	if groupIDRaw != "" {
@@ -51,6 +53,7 @@ func Load() Config {
 		SupabaseURL:     supabaseURL,
 		SupabaseKey:     supabaseKey,
 		GeminiAPIKey:    geminiAPIKey,
+		GeminiModel:     geminiModel,
 		GroupIDs:        groupIDs,
 		BotPhone:        botPhone,
 		ReplyDelayMinMs: replyDelayMinMs,

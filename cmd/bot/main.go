@@ -45,7 +45,7 @@ func main() {
 
 	// 4. Use Cases
 	parserMod := parser.NewReportParser()
-	aiEngine := ai.NewEngine(cfg.GeminiAPIKey)
+	aiEngine := ai.NewEngine(cfg.GeminiAPIKey, cfg.GeminiModel)
 	tafsirEngine := tafsir.NewEngine()
 	tafsirEngine.SetAI(aiEngine)
 	gameEngine := gamification.NewEngine(repo)

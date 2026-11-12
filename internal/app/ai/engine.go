@@ -11,7 +11,9 @@ import (
 	"time"
 )
 
-const geminiEndpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+const defaultGeminiModel = "gemini-3.8-flash"
+
+const geminiEndpointBase = "https://generativelanguage.googleapis.com/v1beta/models/"
 
 const systemPrompt = `Kamu adalah "Shohibul Qur'an Bot", asisten WhatsApp komunitas islami yang ramah dan santun dalam bahasa Indonesia.
 
@@ -34,12 +36,17 @@ Tugas & aturan:
 
 type Engine struct {
 	apiKey string
+	model  string
 	client *http.Client
 }
 
-func NewEngine(apiKey string) *Engine {
+func NewEngine(apiKey, model string) *Engine {
+	if strings.TrimSpace(model) == "" {
+		model = defaultGeminiModel
+	}
 	return &Engine{
 		apiKey: apiKey,
+		model:  strings.TrimSpace(model),
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -62,7 +69,7 @@ func (e *Engine) generate(ctx context.Context, system, user string, temperature 
 	if e.apiKey == "" {
 		return "", fmt.Errorf("gemini api key is empty")
 	}
-	url := geminiEndpoint + "?key=" + e.apiKey
+	url := geminiEndpointBase + e.model + ":generateContent?key=" + e.apiKey
 
 	genConfig := map[string]interface{}{
 		"temperature":     temperature,
