@@ -45,7 +45,7 @@ func main() {
 
 	// 4. Use Cases
 	parserMod := parser.NewReportParser()
-	aiEngine := ai.NewEngine(cfg.GeminiAPIKey, cfg.GeminiModel)
+	aiEngine := ai.NewEngine(cfg.GeminiAPIKey, cfg.GeminiModel, cfg.GeminiFallbackModel)
 	tafsirEngine := tafsir.NewEngine()
 	tafsirEngine.SetAI(aiEngine)
 	gameEngine := gamification.NewEngine(repo)
@@ -147,6 +147,8 @@ func main() {
 				resp := &waE2E.Message{Conversation: &response}
 				if _, err := waService.GetClient().SendMessage(ctx, evt.Info.Chat, resp); err != nil {
 					log.Printf("Failed to send AI response: %v", err)
+				} else {
+					log.Printf("AI response sent to %s", evt.Info.Chat)
 				}
 			}
 			return
@@ -192,7 +194,7 @@ func main() {
 			}
 		}
 	})
-	
+
 	// 7. Initialize Client (DB, Device, etc) - DO NOT CONNECT YET
 	if err := waService.Initialize(context.Background()); err != nil {
 		log.Fatalf("Failed to initialize WhatsApp service: %v", err)
@@ -215,7 +217,7 @@ func main() {
 						return
 					}
 				}
-				
+
 				// Run in background to avoid blocking event handler
 				go func() {
 					welcomeHandler.QueueWelcomeMessage(context.Background(), v.JID, v.Join)
@@ -226,7 +228,7 @@ func main() {
 
 	welcomeHandler = bot.NewEventHandler(waService.GetClient(), cfg.GroupIDs)
 	cronService = scheduler.NewCronService(waService.GetClient(), repo, motEngine, prayerEngine, kajianEngine, sunnahEngine, cfg.GroupIDs)
-	
+
 	// Start Scheduler
 	cronCtx, cronCancel := context.WithCancel(context.Background())
 	defer cronCancel()

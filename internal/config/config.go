@@ -10,17 +10,18 @@ import (
 )
 
 type Config struct {
-	Port            string
-	SQLitePath      string
-	SupabaseURL     string
-	SupabaseKey     string
-	GeminiAPIKey    string
-	GeminiModel     string
-	GroupIDs        []string
-	BotPhone        string
-	ReplyDelayMinMs int  // Minimum delay before reply (milliseconds)
-	ReplyDelayMaxMs int  // Maximum delay before reply (milliseconds), 0 = use min as fixed
-	ShowTyping      bool // Show typing indicator during delay
+	Port                string
+	SQLitePath          string
+	SupabaseURL         string
+	SupabaseKey         string
+	GeminiAPIKey        string
+	GeminiModel         string
+	GeminiFallbackModel string
+	GroupIDs            []string
+	BotPhone            string
+	ReplyDelayMinMs     int  // Minimum delay before reply (milliseconds)
+	ReplyDelayMaxMs     int  // Maximum delay before reply (milliseconds), 0 = use min as fixed
+	ShowTyping          bool // Show typing indicator during delay
 }
 
 func Load() Config {
@@ -32,7 +33,8 @@ func Load() Config {
 	supabaseURL := getenv("SUPABASE_URL", "")
 	supabaseKey := getenv("SUPABASE_KEY", "")
 	geminiAPIKey := getenv("GEMINI_API_KEY", "")
-	geminiModel := getenv("GEMINI_MODEL", "gemini-3.8-flash")
+	geminiModel := getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
+	geminiFallbackModel := getenv("GEMINI_FALLBACK_MODEL", "gemini-3.7-flash")
 	groupIDRaw := getenv("GROUP_ID", "")
 	var groupIDs []string
 	if groupIDRaw != "" {
@@ -49,16 +51,17 @@ func Load() Config {
 	showTyping := getenvBool("SHOW_TYPING", false)
 
 	return Config{
-		SQLitePath:      sqlitePath,
-		SupabaseURL:     supabaseURL,
-		SupabaseKey:     supabaseKey,
-		GeminiAPIKey:    geminiAPIKey,
-		GeminiModel:     geminiModel,
-		GroupIDs:        groupIDs,
-		BotPhone:        botPhone,
-		ReplyDelayMinMs: replyDelayMinMs,
-		ReplyDelayMaxMs: replyDelayMaxMs,
-		ShowTyping:      showTyping,
+		SQLitePath:          sqlitePath,
+		SupabaseURL:         supabaseURL,
+		SupabaseKey:         supabaseKey,
+		GeminiAPIKey:        geminiAPIKey,
+		GeminiModel:         geminiModel,
+		GeminiFallbackModel: geminiFallbackModel,
+		GroupIDs:            groupIDs,
+		BotPhone:            botPhone,
+		ReplyDelayMinMs:     replyDelayMinMs,
+		ReplyDelayMaxMs:     replyDelayMaxMs,
+		ShowTyping:          showTyping,
 	}
 }
 
