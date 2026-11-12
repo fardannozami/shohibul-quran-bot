@@ -91,7 +91,7 @@ func (s *CronService) executeReminder(ctx context.Context) {
 		}
 
 		today := time.Now().Truncate(24 * time.Hour)
-		var unreported []string
+		var reported []string
 		var jids []string
 
 		for _, participant := range groupInfo.Participants {
@@ -99,15 +99,18 @@ func (s *CronService) executeReminder(ctx context.Context) {
 			userID := s.repo.ResolveLIDToPhone(ctx, phone)
 
 			dp, err := s.repo.GetDailyProgress(ctx, userID, gid, today)
-			if err == nil && (dp == nil || dp.ReportsCount == 0) {
-				unreported = append(unreported, fmt.Sprintf("@%s", phone))
+			if err == nil && dp != nil && dp.ReportsCount > 0 {
+				reported = append(reported, fmt.Sprintf("@%s", phone))
 				jids = append(jids, participant.JID.String())
 			}
 		}
 
-		if len(unreported) > 0 {
-			msg := fmt.Sprintf("Assalamu'alaikum, udah jam 18:00 nih.\nAyo yang belum laporan: %s\n\nJangan lupa baca Al-Qur'an hari ini ya!\nKetik: *Alhamdulillah 1 juz*", formatList(unreported))
+		if len(reported) > 0 {
+			msg := fmt.Sprintf("Assalamu'alaikum, udah jam 18:00 nih.\nMasyaAllah, yang sudah lapor ngaji hari ini: %s\n\nBagi yang belum, yuk sempatkan baca Al-Qur'an hari ini ya!\nKetik: *Alhamdulillah 1 juz*", formatList(reported))
 			s.sendToGroup(ctx, gid, msg, jids)
+		} else {
+			msg := "Assalamu'alaikum, udah jam 18:00 nih.\nBelum ada laporan ngaji hari ini. Yuk sempatkan baca Al-Qur'an hari ini ya!\nKetik: *Alhamdulillah 1 juz*"
+			s.sendToGroup(ctx, gid, msg, nil)
 		}
 	}
 }
