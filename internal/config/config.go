@@ -34,7 +34,7 @@ func Load() Config {
 	supabaseKey := getenv("SUPABASE_KEY", "")
 	geminiAPIKey := getenv("GEMINI_API_KEY", "")
 	geminiModel := getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
-	geminiFallbackModel := getenv("GEMINI_FALLBACK_MODEL", "gemini-3.7-flash")
+	geminiFallbackModel := getenv("GEMINI_FALLBACK_MODEL", "gemini-flash-lite-latest")
 	groupIDRaw := getenv("GROUP_ID", "")
 	var groupIDs []string
 	if groupIDRaw != "" {

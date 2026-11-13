@@ -15,8 +15,9 @@ import (
 )
 
 // maxSummaryRunes is the maximum length of the summarized tafsir text
-// produced by the non-AI fallback.
-const maxSummaryRunes = 800
+// produced by the non-AI fallback. It is generous enough for a multi-ayah
+// range so the text ends naturally instead of being chopped early.
+const maxSummaryRunes = 1200
 
 // aiSummarizer produces a natural-language Indonesian summary of tafsir text.
 type aiSummarizer interface {
@@ -270,17 +271,28 @@ func splitSentences(text string) []string {
 	return sentences
 }
 
-// truncateAtWordBoundary shortens s to at most maxChars runes, breaking at a
-// word boundary and appending an ellipsis when truncated.
+// truncateAtWordBoundary shortens s to at most maxChars runes. It prefers to
+// end on a complete sentence so the summary does not stop mid-clause; only
+// when no sentence boundary is available does it break at a word and append
+// an ellipsis.
 func truncateAtWordBoundary(s string, maxChars int) string {
 	runes := []rune(s)
 	if len(runes) <= maxChars {
 		return strings.TrimSpace(s)
 	}
 
-	trimmed := string(runes[:maxChars])
-	if idx := strings.LastIndex(trimmed, " "); idx > maxChars/2 {
-		trimmed = trimmed[:idx]
+	trimmed := runes[:maxChars]
+	// Prefer the last complete sentence in the allowed window.
+	for i := len(trimmed) - 1; i > len(trimmed)/2; i-- {
+		if trimmed[i] == '.' || trimmed[i] == '!' || trimmed[i] == '?' {
+			return strings.TrimSpace(string(trimmed[:i+1]))
+		}
 	}
-	return strings.TrimSpace(trimmed) + "…"
+	// Otherwise fall back to a word boundary with an ellipsis.
+	for i := len(trimmed) - 1; i > len(trimmed)/2; i-- {
+		if trimmed[i] == ' ' {
+			return strings.TrimSpace(string(trimmed[:i])) + "…"
+		}
+	}
+	return strings.TrimSpace(string(trimmed)) + "…"
 }

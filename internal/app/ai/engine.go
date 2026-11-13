@@ -80,11 +80,16 @@ func (e *Engine) GenerateResponse(ctx context.Context, userMessage string) (stri
 }
 
 // GenerateTafsirSummary asks the model to produce a concise Indonesian summary
-// of the given tafsir text (Kemenag via equran.id). Thinking is disabled so
-// the output never gets cut off by the internal thinking budget.
+// of the given tafsir text (Kemenag via equran.id).
+//
+// Thinking is left at the model default (thinkingConfig omitted). Setting
+// thinkingBudget to 0 is rejected by some models (e.g. gemini-3.5-flash-lite
+// returns 400 INVALID_ARGUMENT), which used to make every tafsir summary fall
+// back to the truncated heuristic text. A larger output budget leaves room for
+// the model's internal thinking so the visible answer is not cut off.
 func (e *Engine) GenerateTafsirSummary(ctx context.Context, surahName, ayahLabel, teks string) (string, error) {
 	prompt := fmt.Sprintf("Ringkas tafsir QS. %s:%s berikut dalam 3-5 kalimat yang enak dibaca:\n\n%s", surahName, ayahLabel, teks)
-	return e.generate(ctx, tafsirSystemPrompt, prompt, 0.3, 1000, 0)
+	return e.generate(ctx, tafsirSystemPrompt, prompt, 0.3, 2048, -1)
 }
 
 func (e *Engine) generate(ctx context.Context, system, user string, temperature float64, maxTokens, thinkingTokens int) (string, error) {
