@@ -20,6 +20,9 @@ type Config struct {
 	ReplyDelayMinMs int  // Minimum delay before reply (milliseconds)
 	ReplyDelayMaxMs int  // Maximum delay before reply (milliseconds), 0 = use min as fixed
 	ShowTyping      bool // Show typing indicator during delay
+	// DisabledNotifs holds scheduled notification slots turned off via
+	// DISABLED_NOTIFS (comma separated: pagi, pengingat, malam).
+	DisabledNotifs map[string]bool
 }
 
 func Load() Config {
@@ -45,6 +48,12 @@ func Load() Config {
 	replyDelayMinMs := getenvInt("REPLY_DELAY_MIN_MS", 0)
 	replyDelayMaxMs := getenvInt("REPLY_DELAY_MAX_MS", 0)
 	showTyping := getenvBool("SHOW_TYPING", false)
+	disabledNotifs := map[string]bool{}
+	for _, p := range strings.Split(getenv("DISABLED_NOTIFS", ""), ",") {
+		if trimmed := strings.ToLower(strings.TrimSpace(p)); trimmed != "" {
+			disabledNotifs[trimmed] = true
+		}
+	}
 
 	return Config{
 		SQLitePath:      sqlitePath,
@@ -56,6 +65,7 @@ func Load() Config {
 		ReplyDelayMinMs: replyDelayMinMs,
 		ReplyDelayMaxMs: replyDelayMaxMs,
 		ShowTyping:      showTyping,
+		DisabledNotifs:  disabledNotifs,
 	}
 }
 

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"math/rand"
+	"math"
 	"os"
 	"strings"
 	"time"
@@ -19,6 +19,13 @@ import (
 	"go.mau.fi/whatsmeow/types"
 )
 
+// Nama slot notifikasi yang bisa dimatikan lewat ENV DISABLED_NOTIFS.
+const (
+	NotifPagi      = "pagi"      // 07:00 — ayat/hadist, kajian, countdown Ramadhan, pengingat dhuha
+	NotifPengingat = "pengingat" // 18:00 — mention member yang belum laporan
+	NotifMalam     = "malam"     // 21:00 — sunnah tidur / malam Jum'at
+)
+
 type CronService struct {
 	client       *whatsmeow.Client
 	repo         domain.BotRepository
@@ -27,9 +34,10 @@ type CronService struct {
 	kajianEngine *kajian.Engine
 	sunnahEngine *sunnah.Engine
 	groupIDs     []string
+	disabled     map[string]bool
 }
 
-func NewCronService(client *whatsmeow.Client, repo domain.BotRepository, motEngine *motivation.Engine, prayerEngine *prayer.Engine, kajianEngine *kajian.Engine, sunnahEngine *sunnah.Engine, groupIDs []string) *CronService {
+func NewCronService(client *whatsmeow.Client, repo domain.BotRepository, motEngine *motivation.Engine, prayerEngine *prayer.Engine, kajianEngine *kajian.Engine, sunnahEngine *sunnah.Engine, groupIDs []string, disabled map[string]bool) *CronService {
 	return &CronService{
 		client:       client,
 		repo:         repo,
@@ -38,6 +46,7 @@ func NewCronService(client *whatsmeow.Client, repo domain.BotRepository, motEngi
 		kajianEngine: kajianEngine,
 		sunnahEngine: sunnahEngine,
 		groupIDs:     groupIDs,
+		disabled:     disabled,
 	}
 }
 
@@ -47,29 +56,38 @@ func (s *CronService) Start(ctx context.Context) {
 		return
 	}
 
-	go s.runReminderJob(ctx)
-	go s.runMotivationJob(ctx)
-	go s.runPrayerNotificationJob(ctx)
-	go s.runKajianJob(ctx)
-	go s.runSleepSunnahJob(ctx)
-	go s.runMalamJumatJob(ctx)
-	go s.runRamadhanCountdownJob(ctx)
+	// Broadcast dibatasi 3 slot per hari agar grup tidak dibanjiri pesan bot:
+	// pagi (07:00), pengingat laporan (18:00), dan malam (21:00).
+	if s.enabled(NotifPagi) {
+		go s.runDailyJob(ctx, 7, 0, "morning digest", s.executeMorningDigest)
+	}
+	if s.enabled(NotifPengingat) {
+		go s.runDailyJob(ctx, 18, 0, "daily reminder", s.executeReminder)
+	}
+	if s.enabled(NotifMalam) {
+		go s.runDailyJob(ctx, 21, 0, "night message", s.executeNightMessage)
+	}
 }
 
-func (s *CronService) runReminderJob(ctx context.Context) {
+func (s *CronService) enabled(name string) bool {
+	return !s.disabled[name]
+}
+
+// runDailyJob runs fn every day at hour:minute (local time).
+func (s *CronService) runDailyJob(ctx context.Context, hour, minute int, label string, fn func(context.Context)) {
 	for {
 		now := time.Now()
-		target := time.Date(now.Year(), now.Month(), now.Day(), 18, 0, 0, 0, now.Location())
-		if now.After(target) {
+		target := time.Date(now.Year(), now.Month(), now.Day(), hour, minute, 0, 0, now.Location())
+		if !target.After(now) {
 			target = target.AddDate(0, 0, 1)
 		}
 
-		duration := target.Sub(now)
+		log.Printf("Next %s at %v", label, target)
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(duration):
-			s.executeReminder(ctx)
+		case <-time.After(target.Sub(now)):
+			fn(ctx)
 		}
 	}
 }
@@ -136,276 +154,71 @@ func (s *CronService) sendToGroup(ctx context.Context, gid string, text string, 
 	}
 }
 
-func (s *CronService) runMotivationJob(ctx context.Context) {
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	for {
-		now := time.Now()
-
-		randHour := r.Intn(16) + 6
-		randMin := r.Intn(60)
-
-		target := time.Date(now.Year(), now.Month(), now.Day(), randHour, randMin, 0, 0, now.Location())
-
-		if target.Before(now) {
-			target = target.AddDate(0, 0, 1)
-		}
-
-		duration := target.Sub(now)
-		log.Printf("Next motivation will be sent at %v", target)
-
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(duration):
-			quote := s.motEngine.GetRandomMotivation()
-			msg := fmt.Sprintf("🌟 *Daily Motivation* 🌟\n\n%s", quote)
-			for _, gid := range s.groupIDs {
-				s.sendToGroup(ctx, gid, msg, nil)
-			}
-
-			now2 := time.Now()
-			nextMidnight := time.Date(now2.Year(), now2.Month(), now2.Day()+1, 0, 0, 0, 0, now2.Location())
-
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(nextMidnight.Sub(now2)):
-			}
-		}
-	}
-}
-
-func (s *CronService) runPrayerNotificationJob(ctx context.Context) {
-	for {
-		now := time.Now()
-
-		// Find next prayer notification time
-		nextPrayerTime := s.findNextPrayerTime(now)
-		duration := nextPrayerTime.Sub(now)
-
-		log.Printf("Next prayer notification at %v", nextPrayerTime)
-
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(duration):
-			s.executePrayerNotification(ctx, nextPrayerTime)
-		}
-	}
-}
-
-func (s *CronService) findNextPrayerTime(now time.Time) time.Time {
-	notifications := s.prayerEngine.GetAllNotifications()
-
-	var earliestAfterNow time.Time
-	found := false
-
-	for _, n := range notifications {
-		hour, minute := parseTime(n.Time)
-		target := time.Date(now.Year(), now.Month(), now.Day(), hour, minute, 0, 0, now.Location())
-		if target.After(now) {
-			if !found || target.Before(earliestAfterNow) {
-				earliestAfterNow = target
-				found = true
-			}
-		}
-	}
-
-	if found {
-		return earliestAfterNow
-	}
-
-	// If all times have passed today, schedule for tomorrow's earliest notification
-	var earliestTomorrow time.Time
-	for i, n := range notifications {
-		hour, minute := parseTime(n.Time)
-		target := time.Date(now.Year(), now.Month(), now.Day()+1, hour, minute, 0, 0, now.Location())
-		if i == 0 || target.Before(earliestTomorrow) {
-			earliestTomorrow = target
-		}
-	}
-	return earliestTomorrow
-}
-
-func (s *CronService) executePrayerNotification(ctx context.Context, scheduledTime time.Time) {
-	hour := scheduledTime.Hour()
-	minute := scheduledTime.Minute()
-
-	notification := s.prayerEngine.GetNotificationByTime(hour, minute)
-	if notification == nil {
-		return
-	}
-
-	log.Printf("Executing prayer notification: %s", notification.Name)
-
-	keutamaan := s.prayerEngine.GetRandomKeutamaan(notification)
-	msg := fmt.Sprintf("%s\n\n*Keutamaan %s:*\n%s\n\nSemoga kita semua dilimpahkan keberkahan dan istiqamah dalam beribadah. 🤲", notification.Message, notification.Name, keutamaan)
-
+func (s *CronService) broadcast(ctx context.Context, msg string) {
 	for _, gid := range s.groupIDs {
 		s.sendToGroup(ctx, gid, msg, nil)
 	}
 }
 
-func parseTime(timeStr string) (int, int) {
-	var hour, minute int
-	fmt.Sscanf(timeStr, "%d:%d", &hour, &minute)
-	return hour, minute
+// executeMorningDigest menggabungkan countdown Ramadhan, ayat/hadist, kajian,
+// dan pengingat dhuha menjadi satu pesan pagi.
+func (s *CronService) executeMorningDigest(ctx context.Context) {
+	log.Println("Executing morning digest...")
+	s.broadcast(ctx, s.buildMorningDigest(time.Now()))
 }
 
-func (s *CronService) runSleepSunnahJob(ctx context.Context) {
-	for {
-		now := time.Now()
-		target := time.Date(now.Year(), now.Month(), now.Day(), 21, 00, 0, 0, now.Location())
-		if now.After(target) {
-			target = target.AddDate(0, 0, 1)
-		}
+func (s *CronService) buildMorningDigest(now time.Time) string {
+	var b strings.Builder
+	b.WriteString("🌅 *Assalamu'alaikum, Shohibul Qur'an!*\n")
 
-		duration := target.Sub(now)
-		log.Printf("Next sleep sunnah notification at %v", target)
+	if line := ramadhanLine(ramadhanStartDate(), now); line != "" {
+		b.WriteString("\n" + line + "\n")
+	}
 
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(duration):
-			s.executeSleepSunnah(ctx)
+	b.WriteString("\n💎 *Mutiara Hari Ini*\n")
+	b.WriteString(s.motEngine.GetRandomMotivation() + "\n")
+
+	if item := s.kajianEngine.GetRandomItem(); item != nil {
+		fmt.Fprintf(&b, "\n📚 *Kajian: %s*\n%s\n", item.Title, item.Excerpt)
+		if item.Link != "" {
+			fmt.Fprintf(&b, "🔗 %s\n", item.Link)
 		}
 	}
+
+	b.WriteString("\n☀️ Jangan lupa *Shalat Dhuha* ya")
+	if keutamaan := s.prayerEngine.GetRandomKeutamaan(s.prayerEngine.GetNotificationByName("Shalat Dhuha")); keutamaan != "" {
+		b.WriteString(" — " + keutamaan)
+	}
+	b.WriteString("\n\n📖 Selamat tilawah, semoga istiqamah hari ini! 🤲")
+	return b.String()
 }
 
-func (s *CronService) executeSleepSunnah(ctx context.Context) {
-	log.Println("Executing sleep sunnah notification...")
+// executeNightMessage mengirim konten malam Jum'at pada hari Kamis, dan
+// sunnah sebelum tidur pada hari lainnya.
+func (s *CronService) executeNightMessage(ctx context.Context) {
+	log.Println("Executing night message...")
+	s.broadcast(ctx, s.buildNightMessage(time.Now()))
+}
+
+func (s *CronService) buildNightMessage(now time.Time) string {
+	if now.Weekday() == time.Thursday {
+		if day := s.sunnahEngine.GetSpecialDay("Malam Jum'at"); day != nil {
+			msg := fmt.Sprintf("🌙 *%s* 🌙\n\n%s\n\n", day.Name, day.Message)
+			for i, item := range day.Items {
+				msg += fmt.Sprintf("%d. %s\n\n", i+1, item)
+			}
+			msg += "Semoga kita semua dapat mengamalkannya. 🤲"
+			return msg
+		}
+	}
 
 	sunnah := s.sunnahEngine.GetRandomSleepSunnah()
-	msg := fmt.Sprintf("🌙 *Sunnah Sebelum Tidur* 🌙\n\n*%s*\n\n%s\n\nSemoga kita semua istiqamah dalam mengamalkan sunnah Nabi SAW. 🤲", sunnah.Title, sunnah.Message)
-
-	for _, gid := range s.groupIDs {
-		s.sendToGroup(ctx, gid, msg, nil)
-	}
+	return fmt.Sprintf("🌙 *Sunnah Sebelum Tidur* 🌙\n\n*%s*\n\n%s\n\nSemoga kita semua istiqamah dalam mengamalkan sunnah Nabi SAW. 🤲", sunnah.Title, sunnah.Message)
 }
 
-func (s *CronService) runMalamJumatJob(ctx context.Context) {
-	for {
-		now := time.Now()
-
-		// Malam Jum'at = Kamis malam, yaitu hari ke-5 dalam seminggu (0=Ahad, 4=Kamis)
-		// Kita hitung berapa hari lagi sampai Kamis malam
-		daysUntilThursday := (4 - int(now.Weekday()) + 7) % 7
-		if daysUntilThursday == 0 && now.Hour() >= 20 {
-			// Sudah lewat Kamis malam ini, jadwalkan minggu depan
-			daysUntilThursday = 7
-		}
-
-		target := time.Date(now.Year(), now.Month(), now.Day()+daysUntilThursday, 20, 0, 0, 0, now.Location())
-		duration := target.Sub(now)
-		log.Printf("Next malam Jum'at notification at %v", target)
-
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(duration):
-			s.executeMalamJumat(ctx)
-		}
-	}
-}
-
-func (s *CronService) executeMalamJumat(ctx context.Context) {
-	log.Println("Executing malam Jum'at notification...")
-
-	day := s.sunnahEngine.GetSpecialDay("Malam Jum'at")
-	if day == nil {
-		return
-	}
-
-	msg := fmt.Sprintf("🌙 *%s* 🌙\n\n%s\n\n", day.Name, day.Message)
-	for i, item := range day.Items {
-		msg += fmt.Sprintf("%d. %s\n\n", i+1, item)
-	}
-	msg += "Semoga kita semua dapat mengamalkannya. 🤲"
-
-	for _, gid := range s.groupIDs {
-		s.sendToGroup(ctx, gid, msg, nil)
-	}
-}
-
-func (s *CronService) runKajianJob(ctx context.Context) {
-	for {
-		now := time.Now()
-		// Schedule kajian for 07:00 every day
-		target := time.Date(now.Year(), now.Month(), now.Day(), 7, 0, 0, 0, now.Location())
-		if now.After(target) {
-			target = target.AddDate(0, 0, 1)
-		}
-
-		duration := target.Sub(now)
-		log.Printf("Next kajian notification at %v", target)
-
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(duration):
-			s.executeKajianNotification(ctx)
-		}
-	}
-}
-
-func (s *CronService) executeKajianNotification(ctx context.Context) {
-	log.Println("Executing daily kajian notification...")
-
-	msg := s.kajianEngine.GetRandomKajian()
-	for _, gid := range s.groupIDs {
-		s.sendToGroup(ctx, gid, msg, nil)
-	}
-}
-
-func (s *CronService) sendMessage(ctx context.Context, text string, mentions []string) {
-	for _, gid := range s.groupIDs {
-		groupJID, err := types.ParseJID(gid)
-		if err != nil {
-			log.Printf("Invalid group ID %s: %v", gid, err)
-			continue
-		}
-
-		msg := &waE2E.Message{
-			ExtendedTextMessage: &waE2E.ExtendedTextMessage{
-				Text:        &text,
-				ContextInfo: &waE2E.ContextInfo{},
-			},
-		}
-
-		if len(mentions) > 0 {
-			msg.ExtendedTextMessage.ContextInfo.MentionedJID = mentions
-		}
-
-		_, err = s.client.SendMessage(ctx, groupJID, msg)
-		if err != nil {
-			log.Printf("Failed to send scheduled message to %s: %v", gid, err)
-		}
-	}
-}
-
-func (s *CronService) runRamadhanCountdownJob(ctx context.Context) {
-	for {
-		now := time.Now()
-		target := time.Date(now.Year(), now.Month(), now.Day(), 8, 0, 0, 0, now.Location())
-		if now.After(target) {
-			target = target.AddDate(0, 0, 1)
-		}
-
-		duration := target.Sub(now)
-		log.Printf("Next Ramadhan countdown notification at %v", target)
-
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(duration):
-			s.executeRamadhanCountdown(ctx)
-		}
-	}
-}
-
-func (s *CronService) ramadhanStartDate() time.Time {
+func ramadhanStartDate() time.Time {
 	if v := strings.TrimSpace(os.Getenv("RAMADHAN_DATE")); v != "" {
-		if t, err := time.Parse("2006-01-02", v); err == nil {
+		if t, err := time.ParseInLocation("2006-01-02", v, time.Local); err == nil {
 			return t
 		}
 		log.Printf("Invalid RAMADHAN_DATE %q, using default", v)
@@ -414,33 +227,27 @@ func (s *CronService) ramadhanStartDate() time.Time {
 	return time.Date(2027, 2, 8, 0, 0, 0, 0, time.Local)
 }
 
-func (s *CronService) executeRamadhanCountdown(ctx context.Context) {
-	log.Println("Executing Ramadhan countdown notification...")
+// ramadhanLine returns the countdown / "hari ke-N" line for the morning digest,
+// or "" when Ramadhan is more than 100 days away or already over.
+func ramadhanLine(start, now time.Time) string {
+	startDay := time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, now.Location())
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	// Round to absorb DST/zone offsets so the result is a whole day count.
+	days := int(math.Round(startDay.Sub(today).Hours() / 24))
 
-	ramadhan := s.ramadhanStartDate()
-	now := time.Now().Truncate(24 * time.Hour)
-	ramadhanDay := ramadhan.Truncate(24 * time.Hour)
-	days := int(ramadhanDay.Sub(now).Hours() / 24)
-
-	var msg string
-	if days > 1 {
-		msg = fmt.Sprintf("🌙 *Countdown Ramadhan* 🌙\n\nInsya Allah, Ramadhan tinggal *%d hari lagi*.\n\nSemangat beribadah! Persiapkan diri dengan memperbanyak amal shaleh, membaca Al-Qur'an, dan memohon ampunan kepada Allah. 🤲", days)
-	} else if days == 1 {
-		msg = "🌙 *Countdown Ramadhan* 🌙\n\nInsya Allah, *besok* adalah hari pertama Ramadhan.\n\nSemangat beribadah! Persiapkan diri dengan memperbanyak amal shaleh, membaca Al-Qur'an, dan memohon ampunan kepada Allah. 🤲"
-	} else if days == 0 {
-		msg = "🌙 *Ramadhan Mubarak* 🌙\n\nHari ini adalah hari pertama Ramadhan.\n\nSemangat beribadah puasa Ramadhan! Semoga kita semua dilancarkan dan diterima ibadahnya. 🤲"
-	} else {
-		dayOfRamadhan := -days + 1
-		if dayOfRamadhan <= 30 {
-			msg = fmt.Sprintf("🌙 *Ramadhan Hari ke-%d* 🌙\n\nSemangat beribadah puasa Ramadhan! Semoga kita semua istiqamah dalam ibadah. 🤲", dayOfRamadhan)
-		} else {
-			// Ramadhan sudah selesai, jangan kirim
-			return
-		}
-	}
-
-	for _, gid := range s.groupIDs {
-		s.sendToGroup(ctx, gid, msg, nil)
+	switch {
+	case days > 100:
+		return ""
+	case days > 1:
+		return fmt.Sprintf("🌙 Insya Allah Ramadhan tinggal *%d hari lagi*. Yuk persiapkan diri!", days)
+	case days == 1:
+		return "🌙 Insya Allah *besok* hari pertama Ramadhan. Marhaban ya Ramadhan!"
+	case days == 0:
+		return "🌙 *Ramadhan Mubarak!* Hari ini hari pertama Ramadhan."
+	case -days+1 <= 30:
+		return fmt.Sprintf("🌙 *Ramadhan hari ke-%d* — semoga puasa dan tilawah kita diterima.", -days+1)
+	default:
+		return ""
 	}
 }
 

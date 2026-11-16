@@ -54,6 +54,11 @@ func (r *BotRepository) InitDatabase(ctx context.Context) error {
 			badge TEXT,
 			created_at TEXT
 		)`,
+		`CREATE TABLE IF NOT EXISTS dm_subscriptions (
+			user_id TEXT PRIMARY KEY,
+			chat_jid TEXT,
+			created_at TEXT
+		)`,
 	}
 	for _, q := range queries {
 		if _, err := r.db.ExecContext(ctx, q); err != nil {
@@ -221,6 +226,42 @@ func (r *BotRepository) GetReportsByUser(ctx context.Context, userID string, gro
 		reports = append(reports, &log)
 	}
 	return reports, nil
+}
+
+func (r *BotRepository) GetLatestReport(ctx context.Context, userID string) (*domain.ReportLog, error) {
+	var log domain.ReportLog
+	var date string
+	err := r.db.QueryRowContext(ctx, "SELECT id, user_id, group_id, pages, duration_minutes, message, date FROM reports WHERE user_id = ? ORDER BY date DESC LIMIT 1", userID).
+		Scan(&log.ID, &log.UserID, &log.GroupID, &log.Pages, &log.DurationMinutes, &log.Message, &date)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	log.Date, _ = time.Parse(time.RFC3339, date)
+	return &log, nil
+}
+
+// DM subscription methods
+func (r *BotRepository) SetDMSubscription(ctx context.Context, userID, chatJID string) error {
+	_, err := r.db.ExecContext(ctx, "INSERT INTO dm_subscriptions (user_id, chat_jid, created_at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET chat_jid = excluded.chat_jid",
+		userID, chatJID, time.Now().Format(time.RFC3339))
+	return err
+}
+
+func (r *BotRepository) DeleteDMSubscription(ctx context.Context, userID string) error {
+	_, err := r.db.ExecContext(ctx, "DELETE FROM dm_subscriptions WHERE user_id = ?", userID)
+	return err
+}
+
+func (r *BotRepository) GetDMSubscription(ctx context.Context, userID string) (string, error) {
+	var chatJID string
+	err := r.db.QueryRowContext(ctx, "SELECT chat_jid FROM dm_subscriptions WHERE user_id = ?", userID).Scan(&chatJID)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return chatJID, err
 }
 
 // DailyProgress methods

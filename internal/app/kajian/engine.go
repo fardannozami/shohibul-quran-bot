@@ -280,6 +280,16 @@ func (e *Engine) GetRandomKajian() string {
 	return e.formatKajian(&item)
 }
 
+// GetRandomItem returns a random kajian item for callers that format it themselves.
+func (e *Engine) GetRandomItem() *KajianItem {
+	if len(e.fallback) == 0 {
+		return nil
+	}
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	item := e.fallback[r.Intn(len(e.fallback))]
+	return &item
+}
+
 func (e *Engine) formatKajian(item *KajianItem) string {
 	if item == nil {
 		return ""

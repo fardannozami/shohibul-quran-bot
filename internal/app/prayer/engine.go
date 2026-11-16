@@ -69,6 +69,15 @@ func (e *Engine) GetNotificationByTime(hour, minute int) *PrayerNotification {
 	return nil
 }
 
+func (e *Engine) GetNotificationByName(name string) *PrayerNotification {
+	for _, n := range e.notifications {
+		if n.Name == name {
+			return &n
+		}
+	}
+	return nil
+}
+
 func (e *Engine) GetAllNotifications() []PrayerNotification {
 	return e.notifications
 }

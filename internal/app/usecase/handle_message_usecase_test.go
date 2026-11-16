@@ -118,3 +118,48 @@ func TestHandleSetTarget(t *testing.T) {
 		}
 	})
 }
+
+type dmMockRepo struct {
+	mockRepo
+	subs map[string]string
+}
+
+func (m *dmMockRepo) SetDMSubscription(ctx context.Context, userID, chatJID string) error {
+	m.subs[userID] = chatJID
+	return nil
+}
+
+func (m *dmMockRepo) DeleteDMSubscription(ctx context.Context, userID string) error {
+	delete(m.subs, userID)
+	return nil
+}
+
+func (m *dmMockRepo) GetDMSubscription(ctx context.Context, userID string) (string, error) {
+	return m.subs[userID], nil
+}
+
+func TestExecuteDMOptIn(t *testing.T) {
+	repo := &dmMockRepo{subs: map[string]string{}}
+	uc := &HandleMessageUsecase{repo: repo}
+	ctx := context.Background()
+	userID, chat := "628123", "628123@s.whatsapp.net"
+
+	resp, _ := uc.ExecuteDM(ctx, userID, "Alice", "halo", chat)
+	if !strings.Contains(resp, "#aktif") {
+		t.Errorf("expected opt-in hint for unsubscribed user, got %q", resp)
+	}
+
+	resp, _ = uc.ExecuteDM(ctx, userID, "Alice", " #Aktif ", chat)
+	if repo.subs[userID] != chat || !strings.Contains(resp, "DM sudah aktif") {
+		t.Errorf("expected subscription stored, got subs=%v resp=%q", repo.subs, resp)
+	}
+
+	if resp, _ = uc.ExecuteDM(ctx, userID, "Alice", "terima kasih", chat); resp != "" {
+		t.Errorf("expected no reply for subscribed user's chit-chat, got %q", resp)
+	}
+
+	uc.ExecuteDM(ctx, userID, "Alice", "#stop", chat)
+	if _, ok := repo.subs[userID]; ok {
+		t.Errorf("expected subscription removed")
+	}
+}

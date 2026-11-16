@@ -7,5 +7,6 @@ type BotRepository interface {
 	ReportLogRepository
 	DailyProgressRepository
 	BadgeRepository
+	DMSubscriptionRepository
 	InitDatabase(ctx context.Context) error
 }

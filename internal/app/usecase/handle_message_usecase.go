@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"fmt"
+	"log"
 	"sort"
 	"strconv"
 	"strings"
@@ -14,11 +15,15 @@ import (
 	"github.com/fardannozami/shohibul-quran-bot/internal/parser"
 )
 
+// DMSender sends a personal message to a chat JID that previously opted in.
+type DMSender func(ctx context.Context, chatJID, text string) error
+
 type HandleMessageUsecase struct {
 	repo       domain.BotRepository
 	parser     *parser.ReportParser
 	gameEngine *gamification.Engine
 	motEngine  *motivation.Engine
+	sendDM     DMSender
 }
 
 func NewHandleMessageUsecase(repo domain.BotRepository, parser *parser.ReportParser, gameEngine *gamification.Engine, motEngine *motivation.Engine) *HandleMessageUsecase {
@@ -30,13 +35,23 @@ func NewHandleMessageUsecase(repo domain.BotRepository, parser *parser.ReportPar
 	}
 }
 
+// SetDMSender enables delivering tafsir summaries via personal chat to users
+// who opted in with #aktif.
+func (uc *HandleMessageUsecase) SetDMSender(send DMSender) {
+	uc.sendDM = send
+}
+
 func (uc *HandleMessageUsecase) Execute(ctx context.Context, userID, name, message string, groupID string) (string, error) {
 	msg := strings.ToLower(strings.TrimSpace(message))
 
 	// 1. Check if it's a report (contains alhamdulillah)
 	results := uc.parser.Parse(msg)
 	if len(results) > 0 {
-		return uc.gameEngine.ProcessReports(ctx, userID, name, results, message, groupID)
+		resp, err := uc.gameEngine.ProcessReports(ctx, userID, name, results, message, groupID)
+		if err != nil {
+			return "", err
+		}
+		return resp + uc.tafsirFollowUp(ctx, userID, results), nil
 	}
 
 	// 2. Handle simple commands (support both # and ! prefix)
@@ -54,6 +69,9 @@ func (uc *HandleMessageUsecase) Execute(ctx context.Context, userID, name, messa
 	}
 	if strings.Contains(msg, "!target") {
 		return uc.handleTarget(ctx, groupID)
+	}
+	if strings.HasPrefix(msg, "#tafsir") || strings.HasPrefix(msg, "!tafsir") {
+		return uc.handleTafsir(ctx, userID, groupID, msg[len("#tafsir"):])
 	}
 	if strings.Contains(msg, "!ayat") {
 		return "📖 *Ayat Qur'an*\n\n" + uc.motEngine.GetRandomAyat(), nil
@@ -92,10 +110,137 @@ func (uc *HandleMessageUsecase) handleHelp() string {
 	resp += "- `!stats` atau `#mystats`: Lihat statistik dan *progress targetmu*\n"
 	resp += "- `!leaderboard`: Lihat peringkat 10 besar\n"
 	resp += "- `!target`: Lihat progress target komunitas\n"
+	resp += "- `#tafsir`: Ringkasan tafsir dari laporan terakhirmu, atau `#tafsir Al-Mulk 1-5`\n"
+	resp += "- Chat pribadi bot & ketik `#aktif`: tafsir dikirim via DM, bukan di grup\n"
 	resp += "- `!achievements`: Daftar pencapaian yang bisa diraih\n"
 	resp += "- `!cara`: Lihat bantuan ini lagi\n\n"
 	resp += "Semoga bermanfaat! Barakallahu fiikum. 🤍"
 	return resp
+}
+
+// ExecuteDM handles a personal chat sent to the bot. DMs are only ever sent
+// to users who opted in here first, to keep the bot number from being flagged
+// as spam.
+func (uc *HandleMessageUsecase) ExecuteDM(ctx context.Context, userID, name, message, chatJID string) (string, error) {
+	msg := strings.ToLower(strings.TrimSpace(message))
+
+	switch msg {
+	case "#aktif", "!aktif", "aktif":
+		if err := uc.repo.SetDMSubscription(ctx, userID, chatJID); err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("✅ Ahlan %s, DM sudah aktif.\n\nMulai sekarang ringkasan tafsir dari laporan bacaanmu di grup akan dikirim ke sini, jadi grup tetap rapi.\n\nKetik *#stop* kapan saja untuk menonaktifkan.", name), nil
+	case "#stop", "!stop", "stop":
+		if err := uc.repo.DeleteDMSubscription(ctx, userID); err != nil {
+			return "", err
+		}
+		return "✅ DM dinonaktifkan. Bot tidak akan mengirim pesan pribadi lagi.\nKetik *#aktif* untuk mengaktifkan kembali.", nil
+	}
+
+	if strings.HasPrefix(msg, "#tafsir") || strings.HasPrefix(msg, "!tafsir") {
+		return uc.handleTafsir(ctx, userID, "", msg[len("#tafsir"):])
+	}
+
+	// Pesan lain dari user yang sudah aktif tidak perlu dibalas.
+	if chat, _ := uc.repo.GetDMSubscription(ctx, userID); chat != "" {
+		return "", nil
+	}
+	return "🤖 *Shohibul Qur'an Bot*\n\nKetik *#aktif* agar ringkasan tafsir dari laporan bacaanmu di grup dikirim ke chat ini.\n\nPerintah lain:\n- `#tafsir Al-Mulk 1-5`: ringkasan tafsir ayat tertentu\n- `#stop`: nonaktifkan DM", nil
+}
+
+// tafsirFollowUp returns the line appended to a report reply: tafsir goes to
+// DM for opted-in users, everyone else gets a hint.
+func (uc *HandleMessageUsecase) tafsirFollowUp(ctx context.Context, userID string, results []parser.ParseResult) string {
+	if !uc.gameEngine.CanSummarize(results) {
+		return ""
+	}
+	if chat := uc.dmChat(ctx, userID); chat != "" {
+		uc.sendTafsirDM(chat, results)
+		return "\n📩 Ringkasan tafsir dikirim via DM."
+	}
+	return "\n📜 Ketik *#tafsir* untuk ringkasan tafsir. Mau otomatis via DM? Chat bot ini & ketik *#aktif*."
+}
+
+// dmChat returns the user's DM chat JID if they opted in and DM is available.
+func (uc *HandleMessageUsecase) dmChat(ctx context.Context, userID string) string {
+	if uc.sendDM == nil {
+		return ""
+	}
+	chat, err := uc.repo.GetDMSubscription(ctx, userID)
+	if err != nil {
+		return ""
+	}
+	return chat
+}
+
+// sendTafsirDM summarizes in the background (AI calls can be slow) and DMs it.
+func (uc *HandleMessageUsecase) sendTafsirDM(chatJID string, results []parser.ParseResult) {
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		summary, err := uc.gameEngine.TafsirSummary(ctx, results)
+		if err != nil || summary == "" {
+			log.Printf("Failed to build tafsir for DM %s: %v", chatJID, err)
+			return
+		}
+		if err := uc.sendDM(ctx, chatJID, summary); err != nil {
+			log.Printf("Failed to send tafsir DM to %s: %v", chatJID, err)
+		}
+	}()
+}
+
+const noTafsirMsg = "Afwan, belum ada bacaan surah & ayat yang bisa diringkas.\nContoh: `#tafsir Al-Mulk 1-5`, atau laporkan dulu `Alhamdulillah Al-Mulk 1-5` lalu ketik `#tafsir`."
+
+// handleTafsir returns a tafsir summary for the given surah/ayah (e.g.
+// "#tafsir al-mulk 1-5"), or for the user's latest report when no args given.
+// groupID is "" when called from a DM. In a group, opted-in users get the
+// summary via DM instead.
+func (uc *HandleMessageUsecase) handleTafsir(ctx context.Context, userID, groupID, args string) (string, error) {
+	if !uc.gameEngine.HasTafsir() {
+		return "Afwan, fitur ringkasan tafsir sedang tidak aktif.", nil
+	}
+
+	var results []parser.ParseResult
+	if args = strings.TrimSpace(args); args != "" {
+		// Parser hanya mengenali laporan yang diawali "alhamdulillah".
+		results = uc.parser.Parse("alhamdulillah " + args)
+	} else {
+		var latest *domain.ReportLog
+		if groupID != "" {
+			reports, err := uc.repo.GetReportsByUser(ctx, userID, groupID)
+			if err != nil {
+				return "", err
+			}
+			if len(reports) > 0 {
+				latest = reports[0]
+			}
+		} else {
+			var err error
+			if latest, err = uc.repo.GetLatestReport(ctx, userID); err != nil {
+				return "", err
+			}
+		}
+		if latest != nil {
+			results = uc.parser.Parse(strings.ToLower(latest.Message))
+		}
+	}
+
+	if !uc.gameEngine.CanSummarize(results) {
+		return noTafsirMsg, nil
+	}
+
+	if groupID != "" {
+		if chat := uc.dmChat(ctx, userID); chat != "" {
+			uc.sendTafsirDM(chat, results)
+			return "📩 Ringkasan tafsir dikirim via DM.", nil
+		}
+	}
+
+	summary, err := uc.gameEngine.TafsirSummary(ctx, results)
+	if err != nil || summary == "" {
+		return "Afwan, ringkasan tafsir belum bisa dibuat saat ini. Coba lagi nanti ya 🙏", nil
+	}
+	return summary, nil
 }
 
 func (uc *HandleMessageUsecase) handleTarget(ctx context.Context, groupID string) (string, error) {

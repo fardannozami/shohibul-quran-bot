@@ -59,9 +59,20 @@ func main() {
 	// 5. WhatsApp Service
 	waService := wa.NewService(cfg.SQLitePath, logger, cfg.SupabaseURL, cfg.SupabaseKey)
 
+	// DMs only go to chat JIDs stored when the user opted in via #aktif.
+	handleMessageUC.SetDMSender(func(ctx context.Context, chatJID, text string) error {
+		jid, err := types.ParseJID(chatJID)
+		if err != nil {
+			return err
+		}
+		applyReplyDelay(cfg, waService, ctx, jid)
+		_, err = waService.GetClient().SendMessage(ctx, jid, &waE2E.Message{Conversation: &text})
+		return err
+	})
+
 	// 5.5 Wait until client is ready or expose it to handlers
 	welcomeHandler := bot.NewEventHandler(nil, cfg.GroupIDs) // We will inject client later after waService is initialized.
-	cronService := scheduler.NewCronService(nil, repo, motEngine, prayerEngine, kajianEngine, sunnahEngine, cfg.GroupIDs)
+	cronService := scheduler.NewCronService(nil, repo, motEngine, prayerEngine, kajianEngine, sunnahEngine, cfg.GroupIDs, cfg.DisabledNotifs)
 
 	// 6. Register Message Handler
 	waService.SetMessageHandler(func(ctx context.Context, client *whatsmeow.Client, evt *events.Message) {
@@ -71,9 +82,16 @@ func main() {
 			fmt.Printf("💡 [INFO] Group ID is: %s\n", evt.Info.Chat.String())
 		}
 
+		// Personal chats are handled separately (DM opt-in). Anything else that
+		// isn't a group (status broadcasts, newsletters) is ignored.
+		isDM := !evt.Info.IsGroup && (evt.Info.Chat.Server == types.DefaultUserServer || evt.Info.Chat.Server == types.HiddenUserServer)
+		if !evt.Info.IsGroup && !isDM {
+			return
+		}
+
 		// Only handle messages from groups or specific sources if needed.
 		// For now, we filter by GroupIDs if configured.
-		if len(cfg.GroupIDs) > 0 {
+		if !isDM && len(cfg.GroupIDs) > 0 {
 			allowed := false
 			for _, gid := range cfg.GroupIDs {
 				if evt.Info.Chat.String() == gid {
@@ -126,6 +144,21 @@ func main() {
 		}
 
 		fmt.Printf("Message from %s (%s): %s\n", pushName, userID, msg)
+
+		if isDM {
+			response, err := handleMessageUC.ExecuteDM(ctx, userID, pushName, msg, evt.Info.Chat.String())
+			if err != nil {
+				log.Printf("Error handling DM: %v", err)
+				return
+			}
+			if response != "" {
+				applyReplyDelay(cfg, waService, ctx, evt.Info.Chat)
+				if _, err := waService.GetClient().SendMessage(ctx, evt.Info.Chat, &waE2E.Message{Conversation: &response}); err != nil {
+					log.Printf("Failed to send DM response: %v", err)
+				}
+			}
+			return
+		}
 
 		if isReplyToBot(evt, client) {
 			var response string
@@ -225,7 +258,7 @@ func main() {
 	})
 
 	welcomeHandler = bot.NewEventHandler(waService.GetClient(), cfg.GroupIDs)
-	cronService = scheduler.NewCronService(waService.GetClient(), repo, motEngine, prayerEngine, kajianEngine, sunnahEngine, cfg.GroupIDs)
+	cronService = scheduler.NewCronService(waService.GetClient(), repo, motEngine, prayerEngine, kajianEngine, sunnahEngine, cfg.GroupIDs, cfg.DisabledNotifs)
 	
 	// Start Scheduler
 	cronCtx, cronCancel := context.WithCancel(context.Background())

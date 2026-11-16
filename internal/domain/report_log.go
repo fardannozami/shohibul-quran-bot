@@ -18,4 +18,6 @@ type ReportLog struct {
 type ReportLogRepository interface {
 	InsertReport(ctx context.Context, report *ReportLog) error
 	GetReportsByUser(ctx context.Context, userID string, groupID string) ([]*ReportLog, error)
+	// GetLatestReport returns the user's most recent report across all groups, or nil.
+	GetLatestReport(ctx context.Context, userID string) (*ReportLog, error)
 }

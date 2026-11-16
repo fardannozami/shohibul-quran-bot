@@ -169,7 +169,6 @@ func (e *Engine) ProcessReports(ctx context.Context, userID, name string, result
 			resp += fmt.Sprintf("- %d hlm\n", r.Pages)
 		}
 	}
-	resp = e.appendTafsirSummary(ctx, resp, results)
 	if todayProgress.DurationMinutes > 0 {
 		resp += fmt.Sprintf("Total hari ini: *%d hlm* (⏱️ %d menit)\n", todayProgress.Pages, todayProgress.DurationMinutes)
 	} else {
@@ -254,36 +253,54 @@ func (e *Engine) checkBadges(ctx context.Context, user *domain.User, todayProgre
 	return msg
 }
 
-// appendTafsirSummary enriches the response with a short tafsir summary of the
-// first surah-based reading in the report (if a summarizer is available).
-func (e *Engine) appendTafsirSummary(ctx context.Context, resp string, results []parser.ParseResult) string {
+// HasTafsir reports whether a tafsir summarizer is configured.
+func (e *Engine) HasTafsir() bool {
+	return e.tafsir != nil
+}
+
+// CanSummarize reports whether results contain a reading TafsirSummary can summarize.
+func (e *Engine) CanSummarize(results []parser.ParseResult) bool {
+	return e.tafsir != nil && firstSurahReading(results) != nil
+}
+
+// firstSurahReading returns the first surah-based reading with ayah info.
+func firstSurahReading(results []parser.ParseResult) *parser.ParseResult {
+	for i, r := range results {
+		if r.ReportType == "surah" && r.SurahName != "" && r.StartAyah > 0 && parser.FindSurahNumber(r.SurahName) > 0 {
+			return &results[i]
+		}
+	}
+	return nil
+}
+
+// TafsirSummary builds a tafsir summary message for the first surah-based
+// reading in results. It returns "" when nothing can be summarized.
+func (e *Engine) TafsirSummary(ctx context.Context, results []parser.ParseResult) (string, error) {
 	if e.tafsir == nil {
-		return resp
+		return "", nil
 	}
-	for _, r := range results {
-		if r.ReportType != "surah" || r.SurahName == "" || r.StartAyah <= 0 {
-			continue
-		}
-		surahNum := parser.FindSurahNumber(r.SurahName)
-		if surahNum <= 0 {
-			continue
-		}
-		var summary string
-		var err error
-		ayahLabel := fmt.Sprintf("%d", r.StartAyah)
-		if r.EndAyah > r.StartAyah {
-			summary, err = e.tafsir.SummarizeRange(ctx, surahNum, r.StartAyah, r.EndAyah)
-			ayahLabel = fmt.Sprintf("%d-%d", r.StartAyah, r.EndAyah)
-		} else {
-			summary, err = e.tafsir.Summarize(ctx, surahNum, r.StartAyah)
-		}
-		if err != nil || summary == "" {
-			continue
-		}
-		resp += fmt.Sprintf("\n📜 *Ringkasan Tafsir* (QS. %s:%s)\n%s\n", r.SurahName, ayahLabel, summary)
-		return resp
+	r := firstSurahReading(results)
+	if r == nil {
+		return "", nil
 	}
-	return resp
+	surahNum := parser.FindSurahNumber(r.SurahName)
+
+	var summary string
+	var err error
+	ayahLabel := fmt.Sprintf("%d", r.StartAyah)
+	if r.EndAyah > r.StartAyah {
+		summary, err = e.tafsir.SummarizeRange(ctx, surahNum, r.StartAyah, r.EndAyah)
+		ayahLabel = fmt.Sprintf("%d-%d", r.StartAyah, r.EndAyah)
+	} else {
+		summary, err = e.tafsir.Summarize(ctx, surahNum, r.StartAyah)
+	}
+	if err != nil {
+		return "", err
+	}
+	if summary == "" {
+		return "", nil
+	}
+	return fmt.Sprintf("📜 *Ringkasan Tafsir* (QS. %s:%s)\n%s", r.SurahName, ayahLabel, summary), nil
 }
 
 func (e *Engine) generateProgressBar(current, target int) string {
