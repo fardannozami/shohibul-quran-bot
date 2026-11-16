@@ -223,3 +223,40 @@ func TestExtractDuration(t *testing.T) {
 		})
 	}
 }
+
+func TestParseSingleAyah(t *testing.T) {
+	p := NewReportParser()
+
+	tests := []struct {
+		message    string
+		surah      string
+		start, end int
+	}{
+		{"alhamdulillah al baqarah 255", "Al-Baqarah", 255, 255},
+		{"Alhamdulillah Al-Mulk 1", "Al-Mulk", 1, 1},
+		{"alhamdulillah al-kahfi 10, 20 menit", "Al-Kahfi", 10, 10},
+		{"alhamdulillah al-mulk 1-5", "Al-Mulk", 1, 5},
+		// Numbers followed by a unit or decimal are not ayahs: whole surah.
+		{"Alhamdulillah yasin 1,5 jam", "Yasin", 1, 83},
+		{"alhamdulillah al-mulk 15 menit", "Al-Mulk", 1, 30},
+		{"alhamdulillah al-mulk 2x", "Al-Mulk", 1, 30},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.message, func(t *testing.T) {
+			var got *ParseResult
+			for _, r := range p.Parse(tt.message) {
+				if r.ReportType == "surah" {
+					got = &r
+					break
+				}
+			}
+			if got == nil {
+				t.Fatalf("no surah result for %q", tt.message)
+			}
+			if got.SurahName != tt.surah || got.StartAyah != tt.start || got.EndAyah != tt.end {
+				t.Errorf("got %s %d-%d, want %s %d-%d", got.SurahName, got.StartAyah, got.EndAyah, tt.surah, tt.start, tt.end)
+			}
+		})
+	}
+}

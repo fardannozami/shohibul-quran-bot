@@ -396,17 +396,27 @@ func (p *ReportParser) extractSurahAyah(message *string) []ParseResult {
 		`(?i)\b([a-z][a-z\s'-]{2,}?)\s+ayat\s+(\d+)(?:` + sep + `(\d+))?(?:[\s.,!?;:()\[\]"]|$)`,
 		`(?i)(?:baca|tilawah|membaca)\s+([a-z][a-z\s'-]{2,}?)\s+(\d+)(?:` + sep + `(\d+))?(?:[\s.,!?;:()\[\]"]|$)`,
 		`(?i)\b([a-z][a-z\s'-]{2,}?)\s+(\d+)(?:` + sep + `(\d+))(?:[\s.,!?;:()\[\]"]|$)`,
+		// Single ayah, e.g. "al-baqarah 255". The empty group keeps the end-ayah
+		// index aligned; numbers followed by a unit are rejected below.
+		`(?i)\b([a-z][a-z\s'-]{2,}?)\s+(\d+)()(?:[\s.,!?;:()\[\]"]|$)`,
 		`(?i)\b([a-z][a-z\s'-]{2,}?)(?:[\s.,!?;:()\[\]"]|$)`,
 	}
+	const singleAyahPattern = 4
+	// A number followed by a decimal part or a unit ("yasin 1,5 jam",
+	// "al-mulk 15 menit", "an-naba 2 halaman") is not an ayah number.
+	reNotAyah := regexp.MustCompile(`(?i)^(?:[.,]\d|\s*(?:halaman|hal|hlm|lembar|lbr|menit|mnt|jam|juz|kali|x|hari)\b)`)
 
 	var results []ParseResult
 	seenSurahs := make(map[string]bool)
 
-	for _, pattern := range patterns {
+	for idx, pattern := range patterns {
 		re := regexp.MustCompile(pattern)
 		matches := re.FindAllStringSubmatchIndex(*message, -1)
 		for _, loc := range matches {
 			if strings.TrimSpace((*message)[loc[0]:loc[1]]) == "" {
+				continue
+			}
+			if idx == singleAyahPattern && reNotAyah.MatchString((*message)[loc[5]:]) {
 				continue
 			}
 
