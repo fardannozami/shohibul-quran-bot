@@ -260,3 +260,29 @@ func TestParseSingleAyah(t *testing.T) {
 		})
 	}
 }
+
+func TestParseCrossSurahAyahRange(t *testing.T) {
+	p := NewReportParser()
+
+	// Al-Baqarah 200 is on page 31, Ali 'Imran 100 on page 62.
+	const wantName = "Al-Baqarah ayat 200 - Ali 'Imran ayat 100"
+	const wantPages = 32
+
+	for _, msg := range []string{
+		"alhamdulillah al baqoroh ayat 200 - ali imron ayat 100",
+		"alhamdulillah al baqoroh 200 - ali imron 100",
+		"alhamdulillah al baqoroh ayat 200 sampai ali imron ayat 100",
+		"alhamdulillah al-baqarah 200 s/d ali imran 100",
+		"alhamdulillah al baqoroh ayat 200 sd ali imron ayat 100, 45 menit",
+	} {
+		t.Run(msg, func(t *testing.T) {
+			results := p.Parse(msg)
+			if len(results) != 1 {
+				t.Fatalf("want 1 result, got %d: %+v", len(results), results)
+			}
+			if r := results[0]; r.SurahName != wantName || r.Pages != wantPages {
+				t.Errorf("got %q (%d pages), want %q (%d pages)", r.SurahName, r.Pages, wantName, wantPages)
+			}
+		})
+	}
+}

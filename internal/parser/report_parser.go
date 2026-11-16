@@ -128,49 +128,57 @@ func (p *ReportParser) extractSurahRange(message *string) []ParseResult {
 		wordsAfter := strings.Fields(afterPart)
 
 		s1, s1StartAyah, s1Len := 0, 1, 0
-		// Try to find surah 1. We look at words ending before loc[0].
-		for j := 1; j <= 4 && j <= len(wordsBefore); j++ {
-			candidateWords := wordsBefore[len(wordsBefore)-j:]
-			candidate := strings.Join(candidateWords, " ")
-			if num := FindSurahNumber(candidate); num > 0 {
-				// Check if candidate ends with an ayah number
-				if j > 1 {
-					lastWord := candidateWords[len(candidateWords)-1]
-					if ay, err := strconv.Atoi(lastWord); err == nil {
-						prefix := strings.Join(candidateWords[:len(candidateWords)-1], " ")
-						if pNum := FindSurahNumber(prefix); pNum > 0 {
-							s1 = pNum
-							s1StartAyah = ay
-							s1Len = j
-							break
-						}
-					}
+		// Surah 1 ends right before the separator, optionally followed by
+		// "[ayat] N" (e.g. "al baqoroh ayat 200"). Strip that suffix first.
+		nameBefore := wordsBefore
+		suffixLen := 0
+		if n := len(nameBefore); n > 1 {
+			if ay, err := strconv.Atoi(nameBefore[n-1]); err == nil {
+				nameBefore = nameBefore[:n-1]
+				suffixLen = 1
+				if m := len(nameBefore); m > 1 && nameBefore[m-1] == "ayat" {
+					nameBefore = nameBefore[:m-1]
+					suffixLen = 2
 				}
+				s1StartAyah = ay
+			}
+		}
+		for j := 1; j <= 4 && j <= len(nameBefore); j++ {
+			candidate := strings.Join(nameBefore[len(nameBefore)-j:], " ")
+			if num := FindSurahNumber(candidate); num > 0 {
 				s1 = num
-				s1Len = j
-				s1StartAyah = 1
+				s1Len = j + suffixLen
 				break
 			}
 		}
 
 		s2, s2EndAyah, s2Len := 0, 0, 0
-		// Try to find surah 2. We look at words starting after loc[1].
-		for j := 1; j <= 4 && j <= len(wordsAfter); j++ {
-			candidateWords := wordsAfter[:j]
-			candidate := strings.Join(candidateWords, " ")
+		// Surah 2 starts right after the separator. Collect name words up to an
+		// ayah number / "ayat" / filler word and try the longest candidate
+		// first, so "ali imron" wins over the prefix match "ali" (Al-Isra').
+		nameEnd := 0
+		for nameEnd < len(wordsAfter) && nameEnd < 4 && !isRangeNameStop(wordsAfter[nameEnd]) {
+			nameEnd++
+			// Trailing punctuation ("an-nas,") ends the name after this word.
+			if strings.ContainsAny(wordsAfter[nameEnd-1], ".,!?;:") {
+				break
+			}
+		}
+		for j := nameEnd; j >= 1; j-- {
+			candidate := strings.Join(wordsAfter[:j], " ")
 			if num := FindSurahNumber(candidate); num > 0 {
 				s2 = num
 				s2Len = j
 				s2EndAyah = getSurahMaxAyahs(num)
-				
+
 				// Look ahead for "ayat N" or just "N"
 				if len(wordsAfter) > j {
 					if strings.ToLower(wordsAfter[j]) == "ayat" && len(wordsAfter) > j+1 {
-						if ay, err := strconv.Atoi(wordsAfter[j+1]); err == nil {
+						if ay, err := strconv.Atoi(strings.Trim(wordsAfter[j+1], ".,!?;:")); err == nil {
 							s2EndAyah = ay
 							s2Len = j + 2
 						}
-					} else if ay, err := strconv.Atoi(wordsAfter[j]); err == nil {
+					} else if ay, err := strconv.Atoi(strings.Trim(wordsAfter[j], ".,!?;:")); err == nil {
 						s2EndAyah = ay
 						s2Len = j + 1
 					}
@@ -181,6 +189,13 @@ func (p *ReportParser) extractSurahRange(message *string) []ParseResult {
 
 		if s1 <= 0 || s2 <= 0 || (s2 < s1 && s2 != 0) {
 			continue
+		}
+
+		if maxAyah := getSurahMaxAyahs(s1); s1StartAyah > maxAyah {
+			s1StartAyah = maxAyah
+		}
+		if maxAyah := getSurahMaxAyahs(s2); s2EndAyah > maxAyah {
+			s2EndAyah = maxAyah
 		}
 
 		startPage := getAyahPage(s1, s1StartAyah)
@@ -232,6 +247,20 @@ func (p *ReportParser) extractSurahRange(message *string) []ParseResult {
 		}
 	}
 	return results
+}
+
+// isRangeNameStop reports whether word ends the surah name after a range
+// separator (ayah numbers, "ayat", units and common filler words).
+func isRangeNameStop(word string) bool {
+	if _, err := strconv.Atoi(strings.Trim(word, ".,!?;:")); err == nil {
+		return true
+	}
+	switch strings.Trim(word, ".,!?;:") {
+	case "ayat", "dan", "serta", "hari", "ini", "tadi", "malam", "selama",
+		"juz", "halaman", "hal", "hlm", "lembar", "lbr", "menit", "jam":
+		return true
+	}
+	return false
 }
 
 func (p *ReportParser) extractPages(message *string) int {
