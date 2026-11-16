@@ -11,7 +11,9 @@ import (
 	"time"
 )
 
-const geminiEndpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+const defaultGeminiModel = "gemini-3.5-flash-lite"
+
+const geminiEndpointBase = "https://generativelanguage.googleapis.com/v1beta/models/"
 
 const systemPrompt = `Kamu adalah "Shohibul Qur'an Bot", asisten WhatsApp komunitas islami yang ramah dan santun dalam bahasa Indonesia.
 
@@ -34,14 +36,41 @@ Tugas & aturan:
 
 type Engine struct {
 	apiKey string
+	models []string
 	client *http.Client
 }
 
-func NewEngine(apiKey string) *Engine {
+// NewEngine creates a Gemini engine. Models are tried in order, so a fallback
+// model can be supplied to keep the bot replying when the primary model is
+// overloaded (503) or deprecated (404).
+func NewEngine(apiKey, model, fallbackModel string) *Engine {
+	models := make([]string, 0, 2)
+	for _, m := range []string{strings.TrimSpace(model), strings.TrimSpace(fallbackModel)} {
+		if m == "" {
+			continue
+		}
+		duplicate := false
+		for _, existing := range models {
+			if existing == m {
+				duplicate = true
+				break
+			}
+		}
+		if !duplicate {
+			models = append(models, m)
+		}
+	}
+	if len(models) == 0 {
+		models = []string{defaultGeminiModel}
+	}
+
 	return &Engine{
 		apiKey: apiKey,
+		models: models,
 		client: &http.Client{
-			Timeout: 30 * time.Second,
+			// Keep each attempt short so a stalled/overloaded model does not
+			// block the WhatsApp reply for over a minute.
+			Timeout: 15 * time.Second,
 		},
 	}
 }
@@ -51,18 +80,22 @@ func (e *Engine) GenerateResponse(ctx context.Context, userMessage string) (stri
 }
 
 // GenerateTafsirSummary asks the model to produce a concise Indonesian summary
-// of the given tafsir text (Kemenag via equran.id). Thinking is disabled so
-// the output never gets cut off by the internal thinking budget.
+// of the given tafsir text (Kemenag via equran.id).
+//
+// Thinking is left at the model default (thinkingConfig omitted). Setting
+// thinkingBudget to 0 is rejected by some models (e.g. gemini-3.5-flash-lite
+// returns 400 INVALID_ARGUMENT), which used to make every tafsir summary fall
+// back to the truncated heuristic text. A larger output budget leaves room for
+// the model's internal thinking so the visible answer is not cut off.
 func (e *Engine) GenerateTafsirSummary(ctx context.Context, surahName, ayahLabel, teks string) (string, error) {
 	prompt := fmt.Sprintf("Ringkas tafsir QS. %s:%s berikut dalam 3-5 kalimat yang enak dibaca:\n\n%s", surahName, ayahLabel, teks)
-	return e.generate(ctx, tafsirSystemPrompt, prompt, 0.3, 1000, 0)
+	return e.generate(ctx, tafsirSystemPrompt, prompt, 0.3, 2048, -1)
 }
 
 func (e *Engine) generate(ctx context.Context, system, user string, temperature float64, maxTokens, thinkingTokens int) (string, error) {
 	if e.apiKey == "" {
 		return "", fmt.Errorf("gemini api key is empty")
 	}
-	url := geminiEndpoint + "?key=" + e.apiKey
 
 	genConfig := map[string]interface{}{
 		"temperature":     temperature,
@@ -87,9 +120,13 @@ func (e *Engine) generate(ctx context.Context, system, user string, temperature 
 	if err != nil {
 		return "", err
 	}
+	// Try each configured model once. Using a fallback model is effectively a
+	// retry, but against a different model, so an overloaded primary model does
+	// not leave the user waiting for a long retry loop.
 	var respBody []byte
-	var status int
-	for attempt := 0; attempt < 3; attempt++ {
+	var lastErr error
+	for _, model := range e.models {
+		url := geminiEndpointBase + model + ":generateContent?key=" + e.apiKey
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 		if err != nil {
 			return "", err
@@ -97,37 +134,22 @@ func (e *Engine) generate(ctx context.Context, system, user string, temperature 
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := e.client.Do(req)
 		if err != nil {
-			if attempt == 2 {
-				return "", err
-			}
-			select {
-			case <-ctx.Done():
-				return "", ctx.Err()
-			case <-time.After(time.Duration(attempt+1) * time.Second):
-			}
+			lastErr = err
 			continue
 		}
 		respBody, _ = io.ReadAll(resp.Body)
 		resp.Body.Close()
-		status = resp.StatusCode
-		if status == http.StatusOK {
+		if resp.StatusCode == http.StatusOK {
 			break
 		}
-		if status == 429 || status == 503 || status >= 500 {
-			if attempt == 2 {
-				return "", fmt.Errorf("gemini API error: %d %s", status, strings.TrimSpace(string(respBody)))
-			}
-			select {
-			case <-ctx.Done():
-				return "", ctx.Err()
-			case <-time.After(time.Duration(attempt+1)*2 * time.Second):
-			}
-			continue
-		}
-		return "", fmt.Errorf("gemini API error: %d %s", status, strings.TrimSpace(string(respBody)))
+		lastErr = fmt.Errorf("gemini API error (%s): %d %s", model, resp.StatusCode, strings.TrimSpace(string(respBody)))
+		respBody = nil
 	}
-	if status != http.StatusOK {
-		return "", fmt.Errorf("gemini API error: %d %s", status, strings.TrimSpace(string(respBody)))
+	if respBody == nil {
+		if lastErr == nil {
+			lastErr = fmt.Errorf("gemini request failed")
+		}
+		return "", lastErr
 	}
 
 	var result struct {

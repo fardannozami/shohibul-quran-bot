@@ -34,7 +34,7 @@ func TestSummarizeFetched(t *testing.T) {
 
 func TestSummarizeTruncates(t *testing.T) {
 	// A single very long sentence (no internal breaks) must be capped with an ellipsis.
-	long := strings.Repeat("Ini kata yang sangat panjang ", 30) + "berakhir mulai sekarang."
+	long := strings.Repeat("Ini kata yang sangat panjang ", 60) + "berakhir mulai sekarang."
 	got := summarize(long)
 	n := len([]rune(got))
 	if n > maxSummaryRunes+3 {
